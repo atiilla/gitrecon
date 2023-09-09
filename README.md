@@ -2,7 +2,7 @@
 
 A tool to scan GitHub repositories for exposed email addresses and names.
 
-![screenshot](https://raw.githubusercontent.com/atiilla/gitrecon/main/gitrecon.PNG)
+![screenshot](https://raw.githubusercontent.com/atiilla/gitrecon/main/gitrecon.jpg)
 
 ## Introduction
 
