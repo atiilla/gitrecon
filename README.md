@@ -2,6 +2,8 @@
 
 A tool to scan GitHub repositories for exposed email addresses and names.
 
+![screenshot](https://raw.githubusercontent.com/atiilla/gitrecon/main/gitrecon.PNG)
+
 ## Introduction
 
 This tool uses the GitHub API to scan repositories owned by a user for email addresses and associated names. It provides options to scan specific repositories and exclude forked repositories. Additionally, you can provide a GitHub API token to increase the rate limit for API requests.
