@@ -18,6 +18,8 @@ const HEADER = {
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.141 Safari/537.36',
 };
 
+let found=[]
+
 let DELAY = 3000; // Delay of one second between requests
 
 // Factory function to create Repository objects
@@ -115,7 +117,7 @@ const getEmails = async (username, repoName) => {
             }
 
             seenCommits.add(sha);
-            console.info(`Scanning commit -> ${commitCounter}`);
+            // console.info(`Scanning commit -> ${commitCounter}`);
             commitCounter += 1;
 
             if (!commit.author) {
@@ -235,7 +237,7 @@ const main = async () => {
     const emailsToName = new Map();
     try {
         for (const repo of reposToScan) {
-            console.info(`Scan repository ${repo}`);
+            console.info(`${colors.GREEN}Scanning repository "${colors.YELLOW}${repo}${colors.YELLOW}${colors.GREEN}"`);
             const emailsToNameNew = await getEmails(args.user, repo);
             for (const [email, names] of emailsToNameNew.entries()) {
                 if (!emailsToName.has(email)) {
@@ -248,15 +250,26 @@ const main = async () => {
         console.warn('An error occurred:', error.message);
     }
 
+
     if (emailsToName.size > 0) {
+        
         const maxEmailWidth = Math.max(...Array.from(emailsToName.keys(), (email) => email.length));
         console.info(`${colors.YELLOW}Found the following emails:`);
         for (const [email, names] of emailsToName.entries()) {
             const namesString = Array.from(names).join('; ');
-            console.info(
-                `${colors.GREEN} ${email.padEnd(maxEmailWidth, ' ')} - ${namesString}`
-            );
+            const obj={
+                email:email.padEnd(maxEmailWidth,' '),
+                authors: namesString
+            }
+            found.push(obj)
+            // console.info(
+            //     `${colors.GREEN}Email: ${email.padEnd(maxEmailWidth,' ')}\nName: ${namesString}${colors.NC}\n${'-'.repeat(80)}`
+            // );
+            
         }
+        // \x1b[0m
+        console.log(`\x1b[0m`)
+        console.table(found)
     } else {
         console.info('No emails found');
     }
