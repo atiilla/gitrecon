@@ -262,9 +262,6 @@ const main = async () => {
                 authors: namesString
             }
             found.push(obj)
-            // console.info(
-            //     `${colors.GREEN}Email: ${email.padEnd(maxEmailWidth,' ')}\nName: ${namesString}${colors.NC}\n${'-'.repeat(80)}`
-            // );
             
         }
         // \x1b[0m
