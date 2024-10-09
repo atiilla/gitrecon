@@ -155,12 +155,25 @@ const getEmails = async (username, repoName) => {
     return emailsToName;
 };
 
+const findUserNameByEmail = async(email)=>{
+    // url https://api.github.com/search/users?q=username@domain.com
+
+    const url = `${API_URL}/search/users?q=${email}`;
+    const result = await apiCall(url);
+    return result
+}
+
 // Function to make API calls with a delay
 const apiCall = async (url) => {
     await new Promise((resolve) => setTimeout(resolve, DELAY));
     const response = await axios.get(url, { headers: HEADER, timeout: 10000 });
     return response.data;
 };
+
+const emailRegex = (email)=>{
+    const re = /\S+@\S+\.\S+/;
+    return re.test(email)
+}
 
 // Main function
 const main = async () => {
@@ -185,7 +198,13 @@ const main = async () => {
     parser.add_argument('-u', '--user', {
         help: 'name of the user whose repositories should be scanned',
         type: String,
-        required: true,
+        required: false,
+    });
+
+    parser.add_argument('-e', '--email', {
+        help: 'email address to search for github username',
+        type: String,
+        required: false,
     });
 
     parser.add_argument('-r', '--repository', {
@@ -206,9 +225,17 @@ const main = async () => {
     // Parse command line arguments
     const args = parser.parse_args();
 
-    if (!args.user) {
-        console.warn('No username specified');
-        parser.printHelp();
+    // one of the required arguments is missing
+    if (!args.user && !args.email) {
+        console.warn('No username and email specified [!]\n');
+        parser.print_help();
+        return;
+    }
+
+    // if email is not valid
+    if(!emailRegex(args.email)){
+        console.warn('Invalid email address [!]\n');
+        parser.print_help();
         return;
     }
 
@@ -216,60 +243,66 @@ const main = async () => {
         updateHeader({ Authorization: `token ${args.token}` });
     }
 
-    let reposToScan = [];
-
-    if (args.repository) {
-        reposToScan = [args.repository];
-    } else {
-        console.info(`Scan all public repositories of ${args.user}`);
-        const reposToScanSorted = (
-            await getRepositories(args.user)
-        ).sort((a, b) => (a.isFork ? 1 : -1));
-        reposToScan = reposToScanSorted
-            .filter(
-                (repo) =>
-                    !args.no_forks || !repo.isFork
-            )
-            .map((repo) => repo.name);
-        console.info(`Found ${reposToScan.length} public repositories`);
+    // if email is provided
+    if(args.email){
+        const result = await findUserNameByEmail(args.email)
+        console.log(result)
     }
 
-    const emailsToName = new Map();
-    try {
-        for (const repo of reposToScan) {
-            console.info(`${colors.GREEN}Scanning repository "${colors.YELLOW}${repo}${colors.YELLOW}${colors.GREEN}"`);
-            const emailsToNameNew = await getEmails(args.user, repo);
-            for (const [email, names] of emailsToNameNew.entries()) {
-                if (!emailsToName.has(email)) {
-                    emailsToName.set(email, new Set());
-                }
-                names.forEach((name) => emailsToName.get(email).add(name));
-            }
-        }
-    } catch (error) {
-        console.warn('An error occurred:', error.message);
-    }
+    // let reposToScan = [];
+
+    // if (args.repository) {
+    //     reposToScan = [args.repository];
+    // } else {
+    //     console.info(`Scan all public repositories of ${args.user}`);
+    //     const reposToScanSorted = (
+    //         await getRepositories(args.user)
+    //     ).sort((a, b) => (a.isFork ? 1 : -1));
+    //     reposToScan = reposToScanSorted
+    //         .filter(
+    //             (repo) =>
+    //                 !args.no_forks || !repo.isFork
+    //         )
+    //         .map((repo) => repo.name);
+    //     console.info(`Found ${reposToScan.length} public repositories`);
+    // }
+
+    // const emailsToName = new Map();
+    // try {
+    //     for (const repo of reposToScan) {
+    //         console.info(`${colors.GREEN}Scanning repository "${colors.YELLOW}${repo}${colors.YELLOW}${colors.GREEN}"`);
+    //         const emailsToNameNew = await getEmails(args.user, repo);
+    //         for (const [email, names] of emailsToNameNew.entries()) {
+    //             if (!emailsToName.has(email)) {
+    //                 emailsToName.set(email, new Set());
+    //             }
+    //             names.forEach((name) => emailsToName.get(email).add(name));
+    //         }
+    //     }
+    // } catch (error) {
+    //     console.warn('An error occurred:', error.message);
+    // }
 
 
-    if (emailsToName.size > 0) {
+    // if (emailsToName.size > 0) {
         
-        const maxEmailWidth = Math.max(...Array.from(emailsToName.keys(), (email) => email.length));
-        console.info(`${colors.YELLOW}Found the following emails:`);
-        for (const [email, names] of emailsToName.entries()) {
-            const namesString = Array.from(names).join('; ');
-            const obj={
-                email:email.padEnd(maxEmailWidth,' '),
-                authors: namesString
-            }
-            found.push(obj)
+    //     const maxEmailWidth = Math.max(...Array.from(emailsToName.keys(), (email) => email.length));
+    //     console.info(`${colors.YELLOW}Found the following emails:`);
+    //     for (const [email, names] of emailsToName.entries()) {
+    //         const namesString = Array.from(names).join('; ');
+    //         const obj={
+    //             email:email.padEnd(maxEmailWidth,' '),
+    //             authors: namesString
+    //         }
+    //         found.push(obj)
             
-        }
-        // \x1b[0m
-        console.log(`\x1b[0m`)
-        console.table(found)
-    } else {
-        console.info('No emails found');
-    }
+    //     }
+    //     // \x1b[0m
+    //     console.log(`\x1b[0m`)
+    //     console.table(found)
+    // } else {
+    //     console.info('No emails found');
+    // }
 };
 
 // Run the main function and handle errors
