@@ -4,11 +4,11 @@ const axios = require('axios');
 const { ArgumentParser } = require('argparse');
 
 const colors = {
-        GREEN: '\x1b[32m',
-        YELLOW: '\x1b[33m',
-        NC: '\x1b[0m',
-        CYAN: '\x1b[36m',
-    }
+    GREEN: '\x1b[32m',
+    YELLOW: '\x1b[33m',
+    NC: '\x1b[0m',
+    CYAN: '\x1b[36m',
+}
 
 // Constants
 const API_URL = 'https://api.github.com';
@@ -18,7 +18,7 @@ const HEADER = {
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.141 Safari/537.36',
 };
 
-let found=[]
+let found = []
 
 let DELAY = 3000; // Delay of one second between requests
 
@@ -155,7 +155,7 @@ const getEmails = async (username, repoName) => {
     return emailsToName;
 };
 
-const findUserNameByEmail = async(email)=>{
+const findUserNameByEmail = async (email) => {
     // url https://api.github.com/search/users?q=username@domain.com
 
     const url = `${API_URL}/search/users?q=${email}`;
@@ -170,7 +170,7 @@ const apiCall = async (url) => {
     return response.data;
 };
 
-const emailRegex = (email)=>{
+const emailRegex = (email) => {
     const re = /\S+@\S+\.\S+/;
     return re.test(email)
 }
@@ -232,77 +232,106 @@ const main = async () => {
         return;
     }
 
-    // if email is not valid
-    if(!emailRegex(args.email)){
-        console.warn('Invalid email address [!]\n');
-        parser.print_help();
-        return;
-    }
+
 
     if (args.token) {
         updateHeader({ Authorization: `token ${args.token}` });
     }
 
     // if email is provided
-    if(args.email){
+    if (args.email) {
+        // if email is not valid
+        if (!emailRegex(args.email)) {
+            console.warn('Invalid email address [!]\n');
+            parser.print_help();
+            return;
+        }
         const result = await findUserNameByEmail(args.email)
-        console.log(result)
+        // {
+        //     "login": "tomtom0",
+        //     "id": 5770687,
+        //     "node_id": "MDQ6VXNlcjU3NzA2ODc=",
+        //     "avatar_url": "https://avatars.githubusercontent.com/u/5770687?v=4",
+        //     "gravatar_id": "",
+        //     "url": "https://api.github.com/users/tomtom0",
+        //     "html_url": "https://github.com/tomtom0",
+        //     "followers_url": "https://api.github.com/users/tomtom0/followers",
+        //     "following_url": "https://api.github.com/users/tomtom0/following{/other_user}",
+        //     "gists_url": "https://api.github.com/users/tomtom0/gists{/gist_id}",
+        //     "starred_url": "https://api.github.com/users/tomtom0/starred{/owner}{/repo}",
+        //     "subscriptions_url": "https://api.github.com/users/tomtom0/subscriptions",
+        //     "organizations_url": "https://api.github.com/users/tomtom0/orgs",
+        //     "repos_url": "https://api.github.com/users/tomtom0/repos",
+        //     "events_url": "https://api.github.com/users/tomtom0/events{/privacy}",
+        //     "received_events_url": "https://api.github.com/users/tomtom0/received_events",
+        //     "type": "User",
+        //     "site_admin": false,
+        //     "score": 1.0
+        //   }
+        
+        if(result.total_count > 0){
+            console.log(`${colors.CYAN} Found username ${colors.YELLOW}${result.items[0].login}${colors.CYAN} for email ${colors.YELLOW}${args.email}${colors.CYAN}`);
+        }else{
+            console.log(`${colors.CYAN} No username found for email ${colors.YELLOW}${args.email}${colors.CYAN}`);
+        }
     }
 
-    // let reposToScan = [];
+    if (args.user) {
+        let reposToScan = [];
 
-    // if (args.repository) {
-    //     reposToScan = [args.repository];
-    // } else {
-    //     console.info(`Scan all public repositories of ${args.user}`);
-    //     const reposToScanSorted = (
-    //         await getRepositories(args.user)
-    //     ).sort((a, b) => (a.isFork ? 1 : -1));
-    //     reposToScan = reposToScanSorted
-    //         .filter(
-    //             (repo) =>
-    //                 !args.no_forks || !repo.isFork
-    //         )
-    //         .map((repo) => repo.name);
-    //     console.info(`Found ${reposToScan.length} public repositories`);
-    // }
+        if (args.repository) {
+            reposToScan = [args.repository];
+        } else {
+            console.info(`Scan all public repositories of ${args.user}`);
+            const reposToScanSorted = (
+                await getRepositories(args.user)
+            ).sort((a, b) => (a.isFork ? 1 : -1));
+            reposToScan = reposToScanSorted
+                .filter(
+                    (repo) =>
+                        !args.no_forks || !repo.isFork
+                )
+                .map((repo) => repo.name);
+            console.info(`Found ${reposToScan.length} public repositories`);
+        }
 
-    // const emailsToName = new Map();
-    // try {
-    //     for (const repo of reposToScan) {
-    //         console.info(`${colors.GREEN}Scanning repository "${colors.YELLOW}${repo}${colors.YELLOW}${colors.GREEN}"`);
-    //         const emailsToNameNew = await getEmails(args.user, repo);
-    //         for (const [email, names] of emailsToNameNew.entries()) {
-    //             if (!emailsToName.has(email)) {
-    //                 emailsToName.set(email, new Set());
-    //             }
-    //             names.forEach((name) => emailsToName.get(email).add(name));
-    //         }
-    //     }
-    // } catch (error) {
-    //     console.warn('An error occurred:', error.message);
-    // }
+        const emailsToName = new Map();
+        try {
+            for (const repo of reposToScan) {
+                console.info(`${colors.GREEN}Scanning repository "${colors.YELLOW}${repo}${colors.YELLOW}${colors.GREEN}"`);
+                const emailsToNameNew = await getEmails(args.user, repo);
+                for (const [email, names] of emailsToNameNew.entries()) {
+                    if (!emailsToName.has(email)) {
+                        emailsToName.set(email, new Set());
+                    }
+                    names.forEach((name) => emailsToName.get(email).add(name));
+                }
+            }
+        } catch (error) {
+            console.warn('An error occurred:', error.message);
+        }
 
 
-    // if (emailsToName.size > 0) {
-        
-    //     const maxEmailWidth = Math.max(...Array.from(emailsToName.keys(), (email) => email.length));
-    //     console.info(`${colors.YELLOW}Found the following emails:`);
-    //     for (const [email, names] of emailsToName.entries()) {
-    //         const namesString = Array.from(names).join('; ');
-    //         const obj={
-    //             email:email.padEnd(maxEmailWidth,' '),
-    //             authors: namesString
-    //         }
-    //         found.push(obj)
-            
-    //     }
-    //     // \x1b[0m
-    //     console.log(`\x1b[0m`)
-    //     console.table(found)
-    // } else {
-    //     console.info('No emails found');
-    // }
+        if (emailsToName.size > 0) {
+
+            const maxEmailWidth = Math.max(...Array.from(emailsToName.keys(), (email) => email.length));
+            console.info(`${colors.YELLOW}Found the following emails:`);
+            for (const [email, names] of emailsToName.entries()) {
+                const namesString = Array.from(names).join('; ');
+                const obj = {
+                    email: email.padEnd(maxEmailWidth, ' '),
+                    authors: namesString
+                }
+                found.push(obj)
+
+            }
+            // \x1b[0m
+            console.log(`\x1b[0m`)
+            console.table(found)
+        } else {
+            console.info('No emails found');
+        }
+    }
 };
 
 // Run the main function and handle errors
