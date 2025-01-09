@@ -1,4 +1,4 @@
-# GitHub Email Scanner
+# GitHub repository Scanner
 
 A tool to scan GitHub repositories for exposed email addresses and names.
 
