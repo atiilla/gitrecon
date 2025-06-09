@@ -4,6 +4,7 @@ const axios = require('axios');
 const { ArgumentParser } = require('argparse');
 const fs = require('fs');
 const path = require('path');
+const { exec } = require('child_process');
 
 const colors = {
     GREEN: '\x1b[32m',
@@ -56,14 +57,14 @@ const isValidEmail = (email) => {
 const maskEmail = (email) => {
     const parts = email.split('@');
     if (parts.length !== 2) return email;
-    
+
     const [name, domain] = parts;
-    
+
     // For very short usernames, just show first character
     if (name.length <= 3) {
         return `${name.charAt(0)}${'*'.repeat(name.length - 1)}@${domain}`;
     }
-    
+
     // For normal usernames, show first and last character
     const maskedName = `${name.charAt(0)}${'*'.repeat(name.length - 2)}${name.charAt(name.length - 1)}`;
     return `${maskedName}@${domain}`;
@@ -198,46 +199,46 @@ const generateHtml = (data) => {
 const saveOutput = (data, format, username, site) => {
     const timestamp = new Date().toISOString().replace(/:/g, '-').replace(/\..+/, '');
     const baseFilename = `${username}_${site}_${timestamp}`;
-    
+
     // Create output directory if it doesn't exist
     const outputDir = path.join(process.cwd(), 'gitrecon-results');
     if (!fs.existsSync(outputDir)) {
         fs.mkdirSync(outputDir, { recursive: true });
     }
-    
+
     // Save JSON output
     if (format === 'json' || format === 'all') {
         const jsonFilePath = path.join(outputDir, `${baseFilename}.json`);
         fs.writeFileSync(jsonFilePath, JSON.stringify(data, null, 2));
         console.log(`${colors.GREEN}JSON report saved to: ${colors.YELLOW}${jsonFilePath}${colors.GREEN}`);
     }
-    
+
     // Save HTML output
     if (format === 'html' || format === 'all') {
         const htmlFilePath = path.join(outputDir, `${baseFilename}.html`);
         fs.writeFileSync(htmlFilePath, generateHtml(data));
         console.log(`${colors.GREEN}HTML report saved to: ${colors.YELLOW}${htmlFilePath}${colors.GREEN}`);
     }
-    
+
     return { outputDir, baseFilename };
 };
 
 // Function to download avatar
 const downloadAvatar = async (url, username, site) => {
     if (!url) return null;
-    
+
     try {
-        const response = await axios.get(url, { 
+        const response = await axios.get(url, {
             responseType: 'arraybuffer',
             headers: { 'User-Agent': HEADER['User-Agent'] }
         });
-        
+
         // Create output directory if it doesn't exist
         const outputDir = path.join(process.cwd(), 'gitrecon-results');
         if (!fs.existsSync(outputDir)) {
             fs.mkdirSync(outputDir, { recursive: true });
         }
-        
+
         const avatarPath = path.join(outputDir, `${username}_${site}_avatar.jpg`);
         fs.writeFileSync(avatarPath, Buffer.from(response.data));
         console.log(`${colors.GREEN}Avatar downloaded to: ${colors.YELLOW}${avatarPath}${colors.GREEN}`);
@@ -374,17 +375,17 @@ const getEmails = async (username, repoName) => {
 const apiCall = async (url, options = {}) => {
     await new Promise((resolve) => setTimeout(resolve, DELAY));
     try {
-        const response = await axios.get(url, { 
-            headers: options.headers || HEADER, 
-            timeout: options.timeout || 10000 
+        const response = await axios.get(url, {
+            headers: options.headers || HEADER,
+            timeout: options.timeout || 10000
         });
-        
+
         // Update rate limit info if GitHub API
         if (url.includes('api.github.com') && response.headers) {
             const remaining = response.headers['x-ratelimit-remaining'];
             const limit = response.headers['x-ratelimit-limit'];
             const resetHeader = response.headers['x-ratelimit-reset'];
-            
+
             if (remaining && limit && resetHeader) {
                 const resetTime = new Date(parseInt(resetHeader) * 1000);
                 rateLimitInfo = {
@@ -392,17 +393,17 @@ const apiCall = async (url, options = {}) => {
                     limit: parseInt(limit),
                     resetTime
                 };
-                
+
                 // Display rate limit info
                 console.log(`${colors.DIM}Rate limit: ${remaining}/${limit} (Resets: ${resetTime.toLocaleTimeString()})${colors.NC}`);
-                
+
                 // Warn if rate limit is getting low
                 if (parseInt(remaining) < 10) {
                     console.warn(`${colors.YELLOW}Warning: GitHub API rate limit is getting low (${remaining} remaining)${colors.NC}`);
                 }
             }
         }
-        
+
         return response.data;
     } catch (error) {
         if (error.response) {
@@ -430,10 +431,10 @@ const apiCall = async (url, options = {}) => {
 // Function to find GitHub username by email
 const findUsernameByEmail = async (email) => {
     console.info(`${colors.GREEN}Searching for GitHub username with email "${colors.YELLOW}${email}${colors.GREEN}"${colors.NC}`);
-    
+
     const url = `${API_URL}/search/users?q=${email}`;
     const result = await apiCall(url);
-    
+
     if (result && result.total_count > 0) {
         const user = result.items[0];
         console.log(`${colors.GREEN}Found GitHub username ${colors.YELLOW}${user.login}${colors.GREEN} for email ${colors.YELLOW}${email}${colors.GREEN}${colors.NC}`);
@@ -448,7 +449,7 @@ const findUsernameByEmail = async (email) => {
 const runGithubRecon = async (username, options = {}) => {
     const { downloadAvatarFlag = false, saveFork = false, outputFormat = null } = options;
     console.info(`${colors.GREEN}Running GitHub reconnaissance on user "${colors.YELLOW}${username}${colors.GREEN}"${colors.NC}`);
-    
+
     // Check rate limit before starting
     try {
         const rateLimitData = await apiCall(`${API_URL}/rate_limit`);
@@ -459,20 +460,20 @@ const runGithubRecon = async (username, options = {}) => {
     } catch (error) {
         // Continue anyway if rate limit check fails
     }
-    
+
     // Fetch profile info
     const userInfo = await apiCall(`${API_URL}/users/${username}`);
     if (userInfo.error || (userInfo.message && userInfo.message.includes('Not Found'))) {
         console.error(`${colors.RED}Error: GitHub user "${username}" not found${colors.NC}`);
         return null;
     }
-    
+
     console.log(`${colors.GREEN}Found GitHub user: ${colors.YELLOW}${userInfo.login || username}${colors.GREEN} (${colors.YELLOW}${userInfo.name || 'No name'}${colors.GREEN})${colors.NC}`);
-    
+
     // Fetch organizations
     const orgsData = await apiCall(`${API_URL}/users/${username}/orgs`);
     let orgs = [];
-    
+
     if (Array.isArray(orgsData)) {
         orgs = orgsData.map(org => org.login);
         if (orgs.length > 0) {
@@ -483,11 +484,11 @@ const runGithubRecon = async (username, options = {}) => {
     } else {
         console.warn(`${colors.YELLOW}Error fetching organizations: ${orgsData.message || 'Unknown error'}${colors.NC}`);
     }
-    
+
     // Fetch public SSH keys
     const keysData = await apiCall(`${API_URL}/users/${username}/keys`);
     let keys = [];
-    
+
     if (Array.isArray(keysData)) {
         keys = keysData;
         if (keys.length > 0) {
@@ -498,54 +499,54 @@ const runGithubRecon = async (username, options = {}) => {
     } else {
         console.warn(`${colors.YELLOW}Error fetching public keys: ${keysData.message || 'Unknown error'}${colors.NC}`);
     }
-    
+
     // Gather repositories
     const repositories = await getRepositories(username);
     console.log(`${colors.GREEN}Found ${colors.YELLOW}${repositories.length}${colors.GREEN} public repositories${colors.NC}`);
-    
+
     // Filter out forks if needed (using non-forked repos first)
     const reposToScan = repositories
         .sort((a, b) => (a.isFork ? 1 : -1))
         .filter(repo => !repo.isFork || saveFork)
         .map(repo => repo.name);
-    
+
     console.log(`${colors.GREEN}Scanning ${colors.YELLOW}${reposToScan.length}${colors.GREEN} repositories for leaked emails${colors.NC}`);
-    
+
     // Initialize email tracking
     const emailsToName = new Map();
     const emailsToRepo = new Map();
     let allLeakedEmails = [];
-    
+
     // Scan each repository for commits
     const totalRepos = reposToScan.length;
     for (let i = 0; i < totalRepos; i++) {
         const repo = reposToScan[i];
-        process.stdout.write(`${colors.GREEN}Scanning repository ${colors.YELLOW}${i+1}/${totalRepos}${colors.GREEN}: ${colors.CYAN}${repo}${colors.GREEN}...${colors.NC}`);
-        
+        process.stdout.write(`${colors.GREEN}Scanning repository ${colors.YELLOW}${i + 1}/${totalRepos}${colors.GREEN}: ${colors.CYAN}${repo}${colors.GREEN}...${colors.NC}`);
+
         try {
             const newEmails = await getEmails(username, repo);
             process.stdout.write('\r' + ' '.repeat(100) + '\r'); // Clear the line
-            
+
             let newEmailsCount = 0;
-            
+
             for (const [email, names] of newEmails.entries()) {
                 // Track the repository where this email was found
                 if (!emailsToRepo.has(email)) {
                     emailsToRepo.set(email, new Set());
                 }
                 emailsToRepo.get(email).add(repo);
-                
+
                 // Track all names associated with this email
                 if (!emailsToName.has(email)) {
                     emailsToName.set(email, new Set());
                     allLeakedEmails.push(email);
                     newEmailsCount++;
                 }
-                
+
                 // Add all names from this repository
                 names.forEach(name => emailsToName.get(email).add(name));
             }
-            
+
             if (newEmailsCount > 0) {
                 console.log(`${colors.GREEN}Found ${colors.YELLOW}${newEmailsCount}${colors.GREEN} new emails in ${colors.CYAN}${repo}${colors.GREEN}${colors.NC}`);
             }
@@ -554,14 +555,14 @@ const runGithubRecon = async (username, options = {}) => {
             console.error(`${colors.RED}Error scanning ${repo}: ${error.message}${colors.NC}`);
         }
     }
-    
+
     // Prepare email details for display and output
     const emailDetails = Array.from(emailsToName.entries()).map(([email, namesSet]) => ({
         email,
         names: Array.from(namesSet),
         sources: Array.from(emailsToRepo.get(email) || [])
     }));
-    
+
     // Display results
     console.log(`\n${colors.GREEN}Reconnaissance completed:${colors.NC}`);
     console.log(`${colors.GREEN}User: ${colors.YELLOW}${userInfo.login} (${userInfo.name || 'No name'})${colors.NC}`);
@@ -569,7 +570,7 @@ const runGithubRecon = async (username, options = {}) => {
     console.log(`${colors.GREEN}Organizations: ${colors.YELLOW}${orgs.length > 0 ? orgs.join(', ') : 'None'}${colors.NC}`);
     console.log(`${colors.GREEN}Public Keys: ${colors.YELLOW}${keys.length}${colors.NC}`);
     console.log(`${colors.GREEN}Leaked Emails: ${colors.YELLOW}${allLeakedEmails.length}${colors.NC}`);
-    
+
     if (keys.length > 0) {
         console.log(`\n${colors.YELLOW}Public SSH Keys:${colors.NC}`);
         keys.forEach((key, index) => {
@@ -577,20 +578,20 @@ const runGithubRecon = async (username, options = {}) => {
             console.log(`${key.key.substring(0, 40)}...`);
         });
     }
-    
+
     if (allLeakedEmails.length > 0) {
         console.log(`\n${colors.YELLOW}Leaked Emails:${colors.NC}`);
-        
+
         // Create a more organized table format for output
         const emailTable = emailDetails.map(detail => ({
             email: detail.email,
             names: Array.from(detail.names).join(', ').substring(0, 30) + (Array.from(detail.names).join(', ').length > 30 ? '...' : ''),
             sources: Array.from(detail.sources).length
         }));
-        
+
         console.table(emailTable);
     }
-    
+
     // Build full result object
     const result = {
         username: userInfo.login,
@@ -615,17 +616,17 @@ const runGithubRecon = async (username, options = {}) => {
             key: key.key
         }))
     };
-    
+
     // Download avatar if requested
     if (downloadAvatarFlag && userInfo.avatar_url) {
         await downloadAvatar(userInfo.avatar_url, username, 'github');
     }
-    
+
     // Save output if requested
     if (outputFormat) {
         saveOutput(result, outputFormat, username, 'github');
     }
-    
+
     return result;
 };
 
@@ -633,24 +634,24 @@ const runGithubRecon = async (username, options = {}) => {
 const runGithubOrganizationRecon = async (orgName, options = {}) => {
     const { downloadAvatarFlag = false, outputFormat = null, verbose = false } = options;
     console.info(`${colors.GREEN}Running GitHub reconnaissance on organization "${colors.YELLOW}${orgName}${colors.GREEN}"${colors.NC}`);
-    
+
     // Fetch organization info
     const orgInfo = await apiCall(`${API_URL}/orgs/${orgName}`);
     if (orgInfo.error || (orgInfo.message && orgInfo.message.includes('Not Found'))) {
         console.error(`${colors.RED}Error: GitHub organization "${orgName}" not found${colors.NC}`);
         return null;
     }
-    
+
     console.log(`${colors.GREEN}Found GitHub organization: ${colors.YELLOW}${orgInfo.login || orgName}${colors.GREEN} (${colors.YELLOW}${orgInfo.name || 'No name'}${colors.GREEN})${colors.NC}`);
-    
+
     // Fetch organization members
     const membersData = await apiCall(`${API_URL}/orgs/${orgName}/members?per_page=100`);
     let members = [];
-    
+
     if (Array.isArray(membersData)) {
         members = membersData;
         console.log(`${colors.GREEN}Found ${colors.YELLOW}${members.length}${colors.GREEN} organization members${colors.NC}`);
-        
+
         if (verbose && members.length > 0) {
             console.log(`${colors.YELLOW}Organization Members:${colors.NC}`);
             members.forEach((member, index) => {
@@ -660,15 +661,15 @@ const runGithubOrganizationRecon = async (orgName, options = {}) => {
     } else {
         console.warn(`${colors.YELLOW}Error fetching organization members: ${membersData.message || 'Unknown error'}${colors.NC}`);
     }
-    
+
     // Fetch organization repositories
     const reposData = await apiCall(`${API_URL}/orgs/${orgName}/repos?per_page=100`);
     let repos = [];
-    
+
     if (Array.isArray(reposData)) {
         repos = reposData;
         console.log(`${colors.GREEN}Found ${colors.YELLOW}${repos.length}${colors.GREEN} organization repositories${colors.NC}`);
-        
+
         if (verbose && repos.length > 0) {
             console.log(`${colors.YELLOW}Organization Repositories:${colors.NC}`);
             repos.slice(0, 10).forEach((repo, index) => {
@@ -681,69 +682,69 @@ const runGithubOrganizationRecon = async (orgName, options = {}) => {
     } else {
         console.warn(`${colors.YELLOW}Error fetching organization repositories: ${reposData.message || 'Unknown error'}${colors.NC}`);
     }
-    
+
     // Collect emails from repositories and members
     const allLeakedEmails = [];
     const emailsToName = new Map();
     const emailsToRepo = new Map();
     const emailsToMember = new Map();
-    
+
     // Only scan a subset of repos to avoid rate limiting
     const reposToScan = repos.slice(0, 10);
     const totalRepos = reposToScan.length;
-    
+
     if (totalRepos > 0) {
         console.log(`${colors.GREEN}Scanning ${colors.YELLOW}${totalRepos}${colors.GREEN} repositories for leaked emails${colors.NC}`);
-        
+
         for (let i = 0; i < totalRepos; i++) {
             const repo = reposToScan[i];
-            process.stdout.write(`${colors.GREEN}Scanning repository ${colors.YELLOW}${i+1}/${totalRepos}${colors.GREEN}: ${colors.CYAN}${repo.name}${colors.GREEN}...${colors.NC}`);
-            
+            process.stdout.write(`${colors.GREEN}Scanning repository ${colors.YELLOW}${i + 1}/${totalRepos}${colors.GREEN}: ${colors.CYAN}${repo.name}${colors.GREEN}...${colors.NC}`);
+
             try {
                 // Scan commits in this repository
                 let commitPageCounter = 1;
                 let seenCommits = new Set();
-                
+
                 while (true) {
                     let continueCommitLoop = true;
                     const commitsUrl = `${API_URL}/repos/${orgName}/${repo.name}/commits?per_page=100&page=${commitPageCounter}`;
-                    
+
                     const commitsResult = await apiCall(commitsUrl);
-                    
+
                     if (commitsResult.error || (commitsResult.message && typeof commitsResult.message === 'string')) {
                         break; // Repository is empty or access denied, skip
                     }
-                    
+
                     if (!Array.isArray(commitsResult)) {
                         break;
                     }
-                    
+
                     for (const commit of commitsResult) {
                         if (!commit || !commit.sha) continue;
-                        
+
                         const sha = commit.sha;
                         if (seenCommits.has(sha)) {
                             continueCommitLoop = false;
                             break;
                         }
-                        
+
                         seenCommits.add(sha);
-                        
+
                         if (!commit.commit) continue;
-                        
+
                         const { author, committer } = commit.commit;
-                        
+
                         if (author && author.email) {
                             if (!emailsToName.has(author.email)) {
                                 emailsToName.set(author.email, new Set());
                             }
                             emailsToName.get(author.email).add(author.name || "Unknown");
-                            
+
                             // Map email to GitHub username if available
                             if (commit.author && commit.author.login) {
                                 emailsToMember.set(author.email, commit.author.login);
                             }
-                            
+
                             // Track the repository where this email was found
                             if (!emailsToRepo.has(author.email)) {
                                 emailsToRepo.set(author.email, new Set());
@@ -751,18 +752,18 @@ const runGithubOrganizationRecon = async (orgName, options = {}) => {
                             }
                             emailsToRepo.get(author.email).add(repo.name);
                         }
-                        
+
                         if (committer && committer.email && committer.email !== author.email) {
                             if (!emailsToName.has(committer.email)) {
                                 emailsToName.set(committer.email, new Set());
                             }
                             emailsToName.get(committer.email).add(committer.name || "Unknown");
-                            
+
                             // Map email to GitHub username if available
                             if (commit.committer && commit.committer.login) {
                                 emailsToMember.set(committer.email, commit.committer.login);
                             }
-                            
+
                             // Track the repository where this email was found
                             if (!emailsToRepo.has(committer.email)) {
                                 emailsToRepo.set(committer.email, new Set());
@@ -771,24 +772,24 @@ const runGithubOrganizationRecon = async (orgName, options = {}) => {
                             emailsToRepo.get(committer.email).add(repo.name);
                         }
                     }
-                    
+
                     if (continueCommitLoop && commitsResult.length === 100) {
                         commitPageCounter += 1;
                     } else {
                         break;
                     }
                 }
-                
+
                 process.stdout.write('\r' + ' '.repeat(100) + '\r'); // Clear the line
-                console.log(`${colors.GREEN}Scanned repository ${colors.YELLOW}${i+1}/${totalRepos}${colors.GREEN}: ${colors.CYAN}${repo.name}${colors.GREEN} - Found ${colors.YELLOW}${Array.from(emailsToRepo.keys()).filter(email => emailsToRepo.get(email).has(repo.name)).length}${colors.GREEN} emails${colors.NC}`);
-                
+                console.log(`${colors.GREEN}Scanned repository ${colors.YELLOW}${i + 1}/${totalRepos}${colors.GREEN}: ${colors.CYAN}${repo.name}${colors.GREEN} - Found ${colors.YELLOW}${Array.from(emailsToRepo.keys()).filter(email => emailsToRepo.get(email).has(repo.name)).length}${colors.GREEN} emails${colors.NC}`);
+
             } catch (error) {
                 process.stdout.write('\r' + ' '.repeat(100) + '\r'); // Clear the line
                 console.error(`${colors.RED}Error scanning ${repo.name}: ${error.message}${colors.NC}`);
             }
         }
     }
-    
+
     // Prepare email details for display and output
     const emailDetails = Array.from(emailsToName.entries()).map(([email, namesSet]) => ({
         email,
@@ -796,7 +797,7 @@ const runGithubOrganizationRecon = async (orgName, options = {}) => {
         sources: Array.from(emailsToRepo.get(email) || []),
         github_username: emailsToMember.get(email) || null
     }));
-    
+
     // Display results
     console.log(`\n${colors.GREEN}Reconnaissance completed:${colors.NC}`);
     console.log(`${colors.GREEN}Organization: ${colors.YELLOW}${orgInfo.login} (${orgInfo.name || 'No name'})${colors.NC}`);
@@ -804,10 +805,10 @@ const runGithubOrganizationRecon = async (orgName, options = {}) => {
     console.log(`${colors.GREEN}Members: ${colors.YELLOW}${members.length}${colors.NC}`);
     console.log(`${colors.GREEN}Repositories: ${colors.YELLOW}${repos.length}${colors.NC}`);
     console.log(`${colors.GREEN}Leaked Emails: ${colors.YELLOW}${allLeakedEmails.length}${colors.NC}`);
-    
+
     if (allLeakedEmails.length > 0) {
         console.log(`\n${colors.YELLOW}Leaked Emails:${colors.NC}`);
-        
+
         // Create a more organized table format for output
         const emailTable = emailDetails.map(detail => ({
             email: detail.email,
@@ -815,10 +816,10 @@ const runGithubOrganizationRecon = async (orgName, options = {}) => {
             username: detail.github_username || 'Unknown',
             sources: Array.from(detail.sources).length
         }));
-        
+
         console.table(emailTable);
     }
-    
+
     // Build full result object
     const result = {
         organization: orgInfo.login,
@@ -850,17 +851,17 @@ const runGithubOrganizationRecon = async (orgName, options = {}) => {
         leaked_emails: allLeakedEmails,
         email_details: emailDetails
     };
-    
+
     // Download avatar if requested
     if (downloadAvatarFlag && orgInfo.avatar_url) {
         await downloadAvatar(orgInfo.avatar_url, orgName, 'github_org');
     }
-    
+
     // Save output if requested
     if (outputFormat) {
         saveOutput(result, outputFormat, orgName, 'github_org');
     }
-    
+
     return result;
 };
 
@@ -868,63 +869,63 @@ const runGithubOrganizationRecon = async (orgName, options = {}) => {
 const runGitlabRecon = async (username, options = {}) => {
     const { downloadAvatarFlag = false, outputFormat = null } = options;
     console.info(`${colors.GREEN}Running GitLab reconnaissance on user "${colors.YELLOW}${username}${colors.GREEN}"${colors.NC}`);
-    
+
     // Fetch user ID first
     const userData = await apiCall(`${GITLAB_API_URL}/users?username=${username}`);
-    
+
     if (!userData || userData.error || !Array.isArray(userData) || userData.length === 0) {
         console.error(`${colors.RED}Error: GitLab user "${username}" not found${colors.NC}`);
         return null;
     }
-    
+
     const userId = userData[0].id;
     console.log(`${colors.GREEN}Found GitLab user ID: ${colors.YELLOW}${userId}${colors.NC}`);
-    
+
     // Fetch profile info
     const userInfo = await apiCall(`${GITLAB_API_URL}/users/${userId}`);
     if (userInfo.error) {
         console.error(`${colors.RED}Error fetching user info: ${userInfo.message}${colors.NC}`);
         return null;
     }
-    
+
     console.log(`${colors.GREEN}Found GitLab user: ${colors.YELLOW}${userInfo.username || username}${colors.GREEN} (${colors.YELLOW}${userInfo.name || 'No name'}${colors.GREEN})${colors.NC}`);
-    
+
     // Fetch status
     const userStatus = await apiCall(`${GITLAB_API_URL}/users/${userId}/status`);
-    
+
     // Fetch keys
     const keys = await apiCall(`${GITLAB_API_URL}/users/${userId}/keys`);
-    
+
     if (Array.isArray(keys) && keys.length > 0) {
         console.log(`${colors.GREEN}Found ${colors.YELLOW}${keys.length}${colors.GREEN} public SSH keys${colors.NC}`);
     } else {
         console.log(`${colors.GREEN}No public SSH keys found${colors.NC}`);
     }
-    
+
     // For email leaks, we need to check projects
     const projects = await apiCall(`${GITLAB_API_URL}/users/${userId}/projects`);
-    
+
     let allLeakedEmails = [];
     const emailsToName = new Map();
     const emailsToProject = new Map();
-    
+
     if (Array.isArray(projects)) {
         console.log(`${colors.GREEN}Found ${colors.YELLOW}${projects.length}${colors.GREEN} public projects${colors.NC}`);
-        
+
         // Limit to 10 projects to avoid rate limiting
         const projectsToScan = projects.slice(0, 10);
         const totalProjects = projectsToScan.length;
-        
+
         for (let i = 0; i < totalProjects; i++) {
             const project = projectsToScan[i];
-            process.stdout.write(`${colors.GREEN}Scanning project ${colors.YELLOW}${i+1}/${totalProjects}${colors.GREEN}: ${colors.CYAN}${project.name || `Project ${project.id}`}${colors.GREEN}...${colors.NC}`);
-            
+            process.stdout.write(`${colors.GREEN}Scanning project ${colors.YELLOW}${i + 1}/${totalProjects}${colors.GREEN}: ${colors.CYAN}${project.name || `Project ${project.id}`}${colors.GREEN}...${colors.NC}`);
+
             try {
                 const commits = await apiCall(`${GITLAB_API_URL}/projects/${project.id}/repository/commits`);
                 process.stdout.write('\r' + ' '.repeat(100) + '\r'); // Clear the line
-                
+
                 let newEmailsCount = 0;
-                
+
                 if (Array.isArray(commits)) {
                     for (const commit of commits) {
                         if (commit.author_email) {
@@ -933,7 +934,7 @@ const runGitlabRecon = async (username, options = {}) => {
                                 emailsToProject.set(commit.author_email, new Set());
                             }
                             emailsToProject.get(commit.author_email).add(project.name || `Project ${project.id}`);
-                            
+
                             // Track all names associated with this email
                             if (!emailsToName.has(commit.author_email)) {
                                 emailsToName.set(commit.author_email, new Set());
@@ -942,13 +943,13 @@ const runGitlabRecon = async (username, options = {}) => {
                                     newEmailsCount++;
                                 }
                             }
-                            
+
                             // Add author name
                             emailsToName.get(commit.author_email).add(commit.author_name || "Unknown");
                         }
                     }
                 }
-                
+
                 if (newEmailsCount > 0) {
                     console.log(`${colors.GREEN}Found ${colors.YELLOW}${newEmailsCount}${colors.GREEN} new emails in ${colors.CYAN}${project.name || `Project ${project.id}`}${colors.GREEN}${colors.NC}`);
                 }
@@ -960,21 +961,21 @@ const runGitlabRecon = async (username, options = {}) => {
     } else {
         console.log(`${colors.YELLOW}No projects found or error fetching projects${colors.NC}`);
     }
-    
+
     // Prepare email details for display and output
     const emailDetails = Array.from(emailsToName.entries()).map(([email, namesSet]) => ({
         email,
         names: Array.from(namesSet),
         sources: Array.from(emailsToProject.get(email) || [])
     }));
-    
+
     // Display results
     console.log(`\n${colors.GREEN}Reconnaissance completed:${colors.NC}`);
     console.log(`${colors.GREEN}User: ${colors.YELLOW}${userInfo.username} (${userInfo.name || 'No name'})${colors.NC}`);
     console.log(`${colors.GREEN}URL: ${colors.CYAN}${userInfo.web_url}${colors.NC}`);
     console.log(`${colors.GREEN}Public Keys: ${colors.YELLOW}${Array.isArray(keys) ? keys.length : 0}${colors.NC}`);
     console.log(`${colors.GREEN}Leaked Emails: ${colors.YELLOW}${allLeakedEmails.length}${colors.NC}`);
-    
+
     if (Array.isArray(keys) && keys.length > 0) {
         console.log(`\n${colors.YELLOW}Public SSH Keys:${colors.NC}`);
         keys.forEach((key, index) => {
@@ -989,10 +990,10 @@ const runGitlabRecon = async (username, options = {}) => {
             }
         });
     }
-    
+
     if (allLeakedEmails.length > 0) {
         console.log(`\n${colors.YELLOW}Leaked Emails:${colors.NC}`);
-        
+
         // Create a more organized table format for output
         const emailTable = emailDetails
             .filter(detail => allLeakedEmails.includes(detail.email))
@@ -1001,10 +1002,10 @@ const runGitlabRecon = async (username, options = {}) => {
                 names: Array.from(detail.names).join(', ').substring(0, 30) + (Array.from(detail.names).join(', ').length > 30 ? '...' : ''),
                 sources: Array.from(detail.sources).length
             }));
-        
+
         console.table(emailTable);
     }
-    
+
     // Build full result object
     const result = {
         username: userInfo.username,
@@ -1032,17 +1033,17 @@ const runGitlabRecon = async (username, options = {}) => {
             key: key.key
         })) : []
     };
-    
+
     // Download avatar if requested
     if (downloadAvatarFlag && userInfo.avatar_url) {
         await downloadAvatar(userInfo.avatar_url, username, 'gitlab');
     }
-    
+
     // Save output if requested
     if (outputFormat) {
         saveOutput(result, outputFormat, username, 'gitlab');
     }
-    
+
     return result;
 };
 
@@ -1050,24 +1051,24 @@ const runGitlabRecon = async (username, options = {}) => {
 const runGitlabGroupRecon = async (groupName, options = {}) => {
     const { downloadAvatarFlag = false, outputFormat = null, verbose = false } = options;
     console.info(`${colors.GREEN}Running GitLab reconnaissance on group "${colors.YELLOW}${groupName}${colors.GREEN}"${colors.NC}`);
-    
+
     // Fetch group info
     const groupInfo = await apiCall(`${GITLAB_API_URL}/groups/${groupName}`);
     if (groupInfo.error || (groupInfo.message && groupInfo.message.includes('Not Found'))) {
         console.error(`${colors.RED}Error: GitLab group "${groupName}" not found${colors.NC}`);
         return null;
     }
-    
+
     console.log(`${colors.GREEN}Found GitLab group: ${colors.YELLOW}${groupInfo.name || groupName}${colors.GREEN}${colors.NC}`);
-    
+
     // Fetch group members
     const membersData = await apiCall(`${GITLAB_API_URL}/groups/${groupName}/members`);
     let members = [];
-    
+
     if (Array.isArray(membersData)) {
         members = membersData;
         console.log(`${colors.GREEN}Found ${colors.YELLOW}${members.length}${colors.GREEN} group members${colors.NC}`);
-        
+
         if (verbose && members.length > 0) {
             console.log(`${colors.YELLOW}Group Members:${colors.NC}`);
             members.forEach((member, index) => {
@@ -1077,15 +1078,15 @@ const runGitlabGroupRecon = async (groupName, options = {}) => {
     } else {
         console.warn(`${colors.YELLOW}Error fetching group members: ${membersData.message || 'Unknown error'}${colors.NC}`);
     }
-    
+
     // Fetch group projects
     const projectsData = await apiCall(`${GITLAB_API_URL}/groups/${groupName}/projects`);
     let projects = [];
-    
+
     if (Array.isArray(projectsData)) {
         projects = projectsData;
         console.log(`${colors.GREEN}Found ${colors.YELLOW}${projects.length}${colors.GREEN} group projects${colors.NC}`);
-        
+
         if (verbose && projects.length > 0) {
             console.log(`${colors.YELLOW}Group Projects:${colors.NC}`);
             projects.slice(0, 10).forEach((project, index) => {
@@ -1098,29 +1099,29 @@ const runGitlabGroupRecon = async (groupName, options = {}) => {
     } else {
         console.warn(`${colors.YELLOW}Error fetching group projects: ${projectsData.message || 'Unknown error'}${colors.NC}`);
     }
-    
+
     // Collect emails from projects and members
     const allLeakedEmails = [];
     const emailsToName = new Map();
     const emailsToProject = new Map();
-    
+
     // Only scan a subset of projects to avoid rate limiting
     const projectsToScan = projects.slice(0, 10);
     const totalProjects = projectsToScan.length;
-    
+
     if (totalProjects > 0) {
         console.log(`${colors.GREEN}Scanning ${colors.YELLOW}${totalProjects}${colors.GREEN} projects for leaked emails${colors.NC}`);
-        
+
         for (let i = 0; i < totalProjects; i++) {
             const project = projectsToScan[i];
-            process.stdout.write(`${colors.GREEN}Scanning project ${colors.YELLOW}${i+1}/${totalProjects}${colors.GREEN}: ${colors.CYAN}${project.name}${colors.GREEN}...${colors.NC}`);
-            
+            process.stdout.write(`${colors.GREEN}Scanning project ${colors.YELLOW}${i + 1}/${totalProjects}${colors.GREEN}: ${colors.CYAN}${project.name}${colors.GREEN}...${colors.NC}`);
+
             try {
                 const commits = await apiCall(`${GITLAB_API_URL}/projects/${project.id}/repository/commits`);
                 process.stdout.write('\r' + ' '.repeat(100) + '\r'); // Clear the line
-                
+
                 let newEmailsCount = 0;
-                
+
                 if (Array.isArray(commits)) {
                     for (const commit of commits) {
                         if (commit.author_email) {
@@ -1131,14 +1132,14 @@ const runGitlabGroupRecon = async (groupName, options = {}) => {
                                 newEmailsCount++;
                             }
                             emailsToProject.get(commit.author_email).add(project.name);
-                            
+
                             // Track all names associated with this email
                             if (!emailsToName.has(commit.author_email)) {
                                 emailsToName.set(commit.author_email, new Set());
                             }
                             emailsToName.get(commit.author_email).add(commit.author_name || "Unknown");
                         }
-                        
+
                         // Some GitLab instances also expose committer email
                         if (commit.committer_email && commit.committer_email !== commit.author_email) {
                             // Track the project where this email was found
@@ -1148,7 +1149,7 @@ const runGitlabGroupRecon = async (groupName, options = {}) => {
                                 newEmailsCount++;
                             }
                             emailsToProject.get(commit.committer_email).add(project.name);
-                            
+
                             // Track all names associated with this email
                             if (!emailsToName.has(commit.committer_email)) {
                                 emailsToName.set(commit.committer_email, new Set());
@@ -1157,23 +1158,23 @@ const runGitlabGroupRecon = async (groupName, options = {}) => {
                         }
                     }
                 }
-                
-                console.log(`${colors.GREEN}Scanned project ${colors.YELLOW}${i+1}/${totalProjects}${colors.GREEN}: ${colors.CYAN}${project.name}${colors.GREEN} - Found ${colors.YELLOW}${newEmailsCount}${colors.GREEN} new emails${colors.NC}`);
-                
+
+                console.log(`${colors.GREEN}Scanned project ${colors.YELLOW}${i + 1}/${totalProjects}${colors.GREEN}: ${colors.CYAN}${project.name}${colors.GREEN} - Found ${colors.YELLOW}${newEmailsCount}${colors.GREEN} new emails${colors.NC}`);
+
             } catch (error) {
                 process.stdout.write('\r' + ' '.repeat(100) + '\r'); // Clear the line
                 console.error(`${colors.RED}Error scanning project ${project.id}: ${error.message}${colors.NC}`);
             }
         }
     }
-    
+
     // Prepare email details for display and output
     const emailDetails = Array.from(emailsToName.entries()).map(([email, namesSet]) => ({
         email,
         names: Array.from(namesSet),
         sources: Array.from(emailsToProject.get(email) || [])
     }));
-    
+
     // Display results
     console.log(`\n${colors.GREEN}Reconnaissance completed:${colors.NC}`);
     console.log(`${colors.GREEN}Group: ${colors.YELLOW}${groupInfo.name}${colors.NC}`);
@@ -1181,20 +1182,20 @@ const runGitlabGroupRecon = async (groupName, options = {}) => {
     console.log(`${colors.GREEN}Members: ${colors.YELLOW}${members.length}${colors.NC}`);
     console.log(`${colors.GREEN}Projects: ${colors.YELLOW}${projects.length}${colors.NC}`);
     console.log(`${colors.GREEN}Leaked Emails: ${colors.YELLOW}${allLeakedEmails.length}${colors.NC}`);
-    
+
     if (allLeakedEmails.length > 0) {
         console.log(`\n${colors.YELLOW}Leaked Emails:${colors.NC}`);
-        
+
         // Create a more organized table format for output
         const emailTable = emailDetails.map(detail => ({
             email: detail.email,
             names: Array.from(detail.names).join(', ').substring(0, 30) + (Array.from(detail.names).join(', ').length > 30 ? '...' : ''),
             sources: Array.from(detail.sources).length
         }));
-        
+
         console.table(emailTable);
     }
-    
+
     // Build result object
     const result = {
         group: groupInfo.name,
@@ -1225,30 +1226,40 @@ const runGitlabGroupRecon = async (groupName, options = {}) => {
         leaked_emails: allLeakedEmails,
         email_details: emailDetails
     };
-    
+
     // Download avatar if requested
     if (downloadAvatarFlag && groupInfo.avatar_url) {
         await downloadAvatar(groupInfo.avatar_url, groupName, 'gitlab_group');
     }
-    
+
     // Save output if requested
     if (outputFormat) {
         saveOutput(result, outputFormat, groupName, 'gitlab_group');
     }
-    
+
     return result;
 };
 
 // Main function
 const main = async () => {
-    console.log(`${colors.CYAN}
-    ██████╗ ██╗████████╗██████╗ ███████╗ ██████╗ ██████╗ ███╗   ██╗
-    ██╔════╝ ██║╚══██╔══╝██╔══██╗██╔════╝██╔════╝██╔═══██╗████╗  ██║
-    ██║  ███╗██║   ██║   ██████╔╝█████╗  ██║     ██║   ██║██╔██╗ ██║
-    ██║   ██║██║   ██║   ██╔══██╗██╔══╝  ██║     ██║   ██║██║╚██╗██║
-    ╚██████╔╝██║   ██║   ██║  ██║███████╗╚██████╗╚██████╔╝██║ ╚████║
-     ╚═════╝ ╚═╝   ╚═╝   ╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚═════╝ ╚═╝  ╚═══╝
-                                            https://github.com/atiilla
+    console.log(`${colors.GREEN}         
+                   ##       #                
+           ##       #  ##  ##       #        
+            ##  ##  ## ##  ##  ##  ##        
+             ##  #            ##  ##         
+    ##    ##  #       ####        #  ##   ## 
+      ###  ##   #################   ##  ###  
+        ##   ########  ###  ########  ###    
+           ######### ######  #########       
+           ######### ###### #########        
+             ########  ##  ########          
+                ################             
+                                          
+   GitRecon v0.0.3
+   https://github.com/atiilla
+   This tool is intended for educational and ethical security research purposes only.
+   For awareness information security and education purposes only.
+   
     `);
 
     // Create an argument parser
@@ -1353,7 +1364,7 @@ const main = async () => {
             parser.print_help();
             return;
         }
-        
+
         if (args.site === 'github') {
             const foundUsername = await findUsernameByEmail(args.email);
             if (foundUsername) {
@@ -1371,14 +1382,14 @@ const main = async () => {
     // Run organization reconnaissance
     if (args.org) {
         console.log(`${colors.GREEN}Starting reconnaissance on ${args.site} organization: ${colors.YELLOW}${args.org}${colors.NC}`);
-        
+
         if (args.site === 'github') {
             const orgResult = await runGithubOrganizationRecon(args.org, {
                 downloadAvatarFlag: args.download_avatar,
                 outputFormat: args.output,
                 verbose: args.verbose
             });
-            
+
             if (!orgResult) {
                 console.error(`${colors.RED}Failed to retrieve information for organization ${args.org}${colors.NC}`);
             }
@@ -1388,7 +1399,7 @@ const main = async () => {
                 outputFormat: args.output,
                 verbose: args.verbose
             });
-            
+
             if (!orgResult) {
                 console.error(`${colors.RED}Failed to retrieve information for GitLab group ${args.org}${colors.NC}`);
             }
@@ -1399,30 +1410,30 @@ const main = async () => {
     // Run user reconnaissance
     if (args.user) {
         console.log(`${colors.GREEN}Starting reconnaissance on ${args.site} user: ${colors.YELLOW}${args.user}${colors.NC}`);
-        
+
         if (args.site === 'github') {
             // For GitHub users
             if (args.repository) {
                 // If specific repository is specified
                 console.log(`${colors.GREEN}Scanning specific repository: ${colors.YELLOW}${args.repository}${colors.NC}`);
                 const emailsToName = new Map();
-                
+
                 try {
                     console.info(`${colors.GREEN}Scanning repository "${colors.YELLOW}${args.repository}${colors.GREEN}"${colors.NC}`);
                     const emailsToNameNew = await getEmails(args.user, args.repository);
-                    
+
                     for (const [email, names] of emailsToNameNew.entries()) {
                         if (!emailsToName.has(email)) {
                             emailsToName.set(email, new Set());
                         }
                         names.forEach((name) => emailsToName.get(email).add(name));
                     }
-                    
+
                     if (emailsToName.size > 0) {
                         found = []; // Reset found array
                         const maxEmailWidth = Math.max(...Array.from(emailsToName.keys(), (email) => email.length));
                         console.info(`${colors.YELLOW}Found the following emails:${colors.NC}`);
-                        
+
                         for (const [email, names] of emailsToName.entries()) {
                             const namesString = Array.from(names).join('; ');
                             found.push({
@@ -1430,7 +1441,7 @@ const main = async () => {
                                 authors: namesString
                             });
                         }
-                        
+
                         console.log(`\x1b[0m`);
                         console.table(found);
                     } else {
@@ -1457,9 +1468,9 @@ const main = async () => {
             });
         }
     }
-    
+
     console.log(`${colors.GREEN}Reconnaissance completed.${colors.NC}`);
-    
+
     // Show legal reminder
     console.log(`\n${colors.YELLOW}=== Legal Disclaimer ===${colors.NC}`);
     console.log(`${colors.DIM}This tool is provided for legitimate security research purposes only.`);
