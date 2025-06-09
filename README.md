@@ -76,5 +76,12 @@ A C++ version of this tool is available [here](
 
 ### `Ethics and Disclaimer`
 ```
-This tool is intended to be used for educational purposes only. The author is not responsible for any misuse of this tool.
+DISCLAIMER: This tool is intended for educational and ethical security research purposes only. 
+By using this tool, you agree to:
+1. Only scan repositories you own or have explicit permission to scan
+2. Respect GitHub's Terms of Service and API rate limits
+3. Use collected information responsibly and in compliance with applicable laws
+4. Not use this tool for illegal activities, harassment, or privacy violations
+
+The author expressly disclaims all liability for any direct, indirect, consequential, incidental, or special damages arising out of or in any way connected with the use or misuse of this tool.
 ```
