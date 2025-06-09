@@ -308,9 +308,9 @@ const getEmails = async (username, repoName) => {
         const result = await apiCall(url);
 
         if ('message' in result) {
-            if (result.message === 'Git Repository is empty.') {
-                console.info('Git repository is empty');
-                continue;
+            if (result.message === 'Git Repository is empty.' || result.message === 'No commit found') {
+                console.info(`${colors.YELLOW}Repository ${repoName} is empty - skipping${colors.NC}`);
+                return emailsToName;
             }
 
             if (result.message.includes('API rate limit exceeded for ')) {
@@ -445,10 +445,46 @@ const findUsernameByEmail = async (email) => {
     }
 };
 
+// Add a utility function for real-time saving
+const saveRealTime = (data, username, site, outputDir) => {
+    const baseFilename = `${username}_${site}_realtime`;
+    
+    if (!fs.existsSync(outputDir)) {
+        fs.mkdirSync(outputDir, { recursive: true });
+    }
+    
+    const jsonFilePath = path.join(outputDir, `${baseFilename}.json`);
+    
+    // Add timestamp to the data
+    data.last_updated = new Date().toISOString();
+    
+    // Write the data to the file, overwriting any previous content
+    fs.writeFileSync(jsonFilePath, JSON.stringify(data, null, 2));
+    console.log(`${colors.GREEN}Real-time data saved to: ${colors.YELLOW}${jsonFilePath}${colors.GREEN}`);
+    
+    return jsonFilePath;
+};
+
 // Function to run GitHub reconnaissance
 const runGithubRecon = async (username, options = {}) => {
     const { downloadAvatarFlag = false, saveFork = false, outputFormat = null } = options;
     console.info(`${colors.GREEN}Running GitHub reconnaissance on user "${colors.YELLOW}${username}${colors.GREEN}"${colors.NC}`);
+
+    // Create output directory if it doesn't exist
+    const outputDir = path.join(process.cwd(), 'gitrecon-results');
+    if (!fs.existsSync(outputDir)) {
+        fs.mkdirSync(outputDir, { recursive: true });
+    }
+
+    // Prepare result object with basic structure
+    let result = {
+        username: username,
+        scan_started_at: new Date().toISOString(),
+        organizations: [],
+        leaked_emails: [],
+        email_details: [],
+        keys: []
+    };
 
     // Check rate limit before starting
     try {
@@ -468,6 +504,27 @@ const runGithubRecon = async (username, options = {}) => {
         return null;
     }
 
+    // Update result with user info
+    Object.assign(result, {
+        username: userInfo.login,
+        name: userInfo.name,
+        id: userInfo.id,
+        avatar_url: userInfo.avatar_url,
+        email: userInfo.email,
+        location: userInfo.location,
+        bio: userInfo.bio,
+        company: userInfo.company,
+        blog: userInfo.blog,
+        twitter_username: userInfo.twitter_username,
+        followers: userInfo.followers,
+        following: userInfo.following,
+        created_at: userInfo.created_at,
+        updated_at: userInfo.updated_at
+    });
+    
+    // Save initial data
+    saveRealTime(result, username, 'github', outputDir);
+
     console.log(`${colors.GREEN}Found GitHub user: ${colors.YELLOW}${userInfo.login || username}${colors.GREEN} (${colors.YELLOW}${userInfo.name || 'No name'}${colors.GREEN})${colors.NC}`);
 
     // Fetch organizations
@@ -481,6 +538,10 @@ const runGithubRecon = async (username, options = {}) => {
         } else {
             console.log(`${colors.GREEN}No organizations found${colors.NC}`);
         }
+        
+        // Update result with organizations
+        result.organizations = orgs;
+        saveRealTime(result, username, 'github', outputDir);
     } else {
         console.warn(`${colors.YELLOW}Error fetching organizations: ${orgsData.message || 'Unknown error'}${colors.NC}`);
     }
@@ -496,6 +557,13 @@ const runGithubRecon = async (username, options = {}) => {
         } else {
             console.log(`${colors.GREEN}No public SSH keys found${colors.NC}`);
         }
+        
+        // Update result with keys
+        result.keys = keys.map(key => ({
+            id: key.id,
+            key: key.key
+        }));
+        saveRealTime(result, username, 'github', outputDir);
     } else {
         console.warn(`${colors.YELLOW}Error fetching public keys: ${keysData.message || 'Unknown error'}${colors.NC}`);
     }
@@ -549,10 +617,48 @@ const runGithubRecon = async (username, options = {}) => {
 
             if (newEmailsCount > 0) {
                 console.log(`${colors.GREEN}Found ${colors.YELLOW}${newEmailsCount}${colors.GREEN} new emails in ${colors.CYAN}${repo}${colors.GREEN}${colors.NC}`);
+                
+                // Update result with email details
+                const emailDetails = Array.from(emailsToName.entries()).map(([email, namesSet]) => ({
+                    email,
+                    names: Array.from(namesSet),
+                    sources: Array.from(emailsToRepo.get(email) || [])
+                }));
+                
+                result.leaked_emails = allLeakedEmails;
+                result.email_details = emailDetails;
+                result.scan_progress = `${i + 1}/${totalRepos} repositories scanned`;
+                
+                // Save after each repository that yields new emails
+                saveRealTime(result, username, 'github', outputDir);
+            } else {
+                // Periodically save progress, every 5 repositories
+                if (i % 5 === 0 && i > 0) {
+                    result.scan_progress = `${i + 1}/${totalRepos} repositories scanned`;
+                    saveRealTime(result, username, 'github', outputDir);
+                }
             }
         } catch (error) {
             process.stdout.write('\r' + ' '.repeat(100) + '\r'); // Clear the line
             console.error(`${colors.RED}Error scanning ${repo}: ${error.message}${colors.NC}`);
+            
+            // Save progress on error
+            const emailDetails = Array.from(emailsToName.entries()).map(([email, namesSet]) => ({
+                email,
+                names: Array.from(namesSet),
+                sources: Array.from(emailsToRepo.get(email) || [])
+            }));
+            
+            result.leaked_emails = allLeakedEmails;
+            result.email_details = emailDetails;
+            result.scan_progress = `${i + 1}/${totalRepos} repositories scanned`;
+            result.last_error = {
+                repository: repo,
+                message: error.message,
+                timestamp: new Date().toISOString()
+            };
+            
+            saveRealTime(result, username, 'github', outputDir);
         }
     }
 
@@ -592,37 +698,16 @@ const runGithubRecon = async (username, options = {}) => {
         console.table(emailTable);
     }
 
-    // Build full result object
-    const result = {
-        username: userInfo.login,
-        name: userInfo.name,
-        id: userInfo.id,
-        avatar_url: userInfo.avatar_url,
-        email: userInfo.email,
-        location: userInfo.location,
-        bio: userInfo.bio,
-        company: userInfo.company,
-        blog: userInfo.blog,
-        twitter_username: userInfo.twitter_username,
-        followers: userInfo.followers,
-        following: userInfo.following,
-        created_at: userInfo.created_at,
-        updated_at: userInfo.updated_at,
-        organizations: orgs,
-        leaked_emails: allLeakedEmails,
-        email_details: emailDetails,
-        keys: keys.map(key => ({
-            id: key.id,
-            key: key.key
-        }))
-    };
+    // Build full result object with final data
+    result.scan_completed_at = new Date().toISOString();
+    result.scan_progress = "completed";
 
     // Download avatar if requested
     if (downloadAvatarFlag && userInfo.avatar_url) {
         await downloadAvatar(userInfo.avatar_url, username, 'github');
     }
 
-    // Save output if requested
+    // Save final output if requested
     if (outputFormat) {
         saveOutput(result, outputFormat, username, 'github');
     }
@@ -635,12 +720,46 @@ const runGithubOrganizationRecon = async (orgName, options = {}) => {
     const { downloadAvatarFlag = false, outputFormat = null, verbose = false } = options;
     console.info(`${colors.GREEN}Running GitHub reconnaissance on organization "${colors.YELLOW}${orgName}${colors.GREEN}"${colors.NC}`);
 
+    // Create output directory if it doesn't exist
+    const outputDir = path.join(process.cwd(), 'gitrecon-results');
+    if (!fs.existsSync(outputDir)) {
+        fs.mkdirSync(outputDir, { recursive: true });
+    }
+
+    // Prepare result object with basic structure
+    let result = {
+        organization: orgName,
+        scan_started_at: new Date().toISOString(),
+        members: [],
+        repositories: [],
+        leaked_emails: [],
+        email_details: []
+    };
+
     // Fetch organization info
     const orgInfo = await apiCall(`${API_URL}/orgs/${orgName}`);
     if (orgInfo.error || (orgInfo.message && orgInfo.message.includes('Not Found'))) {
         console.error(`${colors.RED}Error: GitHub organization "${orgName}" not found${colors.NC}`);
         return null;
     }
+
+    // Update result with organization info
+    Object.assign(result, {
+        organization: orgInfo.login,
+        name: orgInfo.name,
+        id: orgInfo.id,
+        description: orgInfo.description,
+        location: orgInfo.location,
+        blog: orgInfo.blog,
+        email: orgInfo.email,
+        twitter_username: orgInfo.twitter_username,
+        created_at: orgInfo.created_at,
+        updated_at: orgInfo.updated_at,
+        avatar_url: orgInfo.avatar_url
+    });
+
+    // Save initial data
+    saveRealTime(result, orgName, 'github_org', outputDir);
 
     console.log(`${colors.GREEN}Found GitHub organization: ${colors.YELLOW}${orgInfo.login || orgName}${colors.GREEN} (${colors.YELLOW}${orgInfo.name || 'No name'}${colors.GREEN})${colors.NC}`);
 
@@ -651,6 +770,15 @@ const runGithubOrganizationRecon = async (orgName, options = {}) => {
     if (Array.isArray(membersData)) {
         members = membersData;
         console.log(`${colors.GREEN}Found ${colors.YELLOW}${members.length}${colors.GREEN} organization members${colors.NC}`);
+
+        // Update result with members
+        result.members = members.map(member => ({
+            login: member.login,
+            id: member.id,
+            type: member.type,
+            avatar_url: member.avatar_url
+        }));
+        saveRealTime(result, orgName, 'github_org', outputDir);
 
         if (verbose && members.length > 0) {
             console.log(`${colors.YELLOW}Organization Members:${colors.NC}`);
@@ -669,6 +797,18 @@ const runGithubOrganizationRecon = async (orgName, options = {}) => {
     if (Array.isArray(reposData)) {
         repos = reposData;
         console.log(`${colors.GREEN}Found ${colors.YELLOW}${repos.length}${colors.GREEN} organization repositories${colors.NC}`);
+
+        // Update result with repositories
+        result.repositories = repos.map(repo => ({
+            name: repo.name,
+            description: repo.description,
+            language: repo.language,
+            fork: repo.fork,
+            created_at: repo.created_at,
+            updated_at: repo.updated_at,
+            url: repo.html_url
+        }));
+        saveRealTime(result, orgName, 'github_org', outputDir);
 
         if (verbose && repos.length > 0) {
             console.log(`${colors.YELLOW}Organization Repositories:${colors.NC}`);
@@ -704,6 +844,7 @@ const runGithubOrganizationRecon = async (orgName, options = {}) => {
                 // Scan commits in this repository
                 let commitPageCounter = 1;
                 let seenCommits = new Set();
+                let newEmailsFound = false;
 
                 while (true) {
                     let continueCommitLoop = true;
@@ -711,8 +852,39 @@ const runGithubOrganizationRecon = async (orgName, options = {}) => {
 
                     const commitsResult = await apiCall(commitsUrl);
 
-                    if (commitsResult.error || (commitsResult.message && typeof commitsResult.message === 'string')) {
-                        break; // Repository is empty or access denied, skip
+                    // Handle empty repositories and API errors
+                    if ('message' in commitsResult) {
+                        if (commitsResult.message === 'Git Repository is empty.' || commitsResult.message === 'No commit found') {
+                            process.stdout.write('\r' + ' '.repeat(100) + '\r'); // Clear the line
+                            console.log(`${colors.YELLOW}Repository ${colors.CYAN}${repo.name}${colors.YELLOW} is empty - skipping${colors.NC}`);
+                            break; // Skip this repo
+                        }
+                        
+                        if (commitsResult.message.includes('API rate limit exceeded for ')) {
+                            process.stdout.write('\r' + ' '.repeat(100) + '\r'); // Clear the line
+                            console.error(`${colors.RED}API rate limit exceeded - saving current results${colors.NC}`);
+                            
+                            // Save current results before exiting
+                            const emailDetails = Array.from(emailsToName.entries()).map(([email, namesSet]) => ({
+                                email,
+                                names: Array.from(namesSet),
+                                sources: Array.from(emailsToRepo.get(email) || []),
+                                github_username: emailsToMember.get(email) || null
+                            }));
+                            
+                            result.leaked_emails = allLeakedEmails;
+                            result.email_details = emailDetails;
+                            result.last_updated = new Date().toISOString();
+                            result.scan_interrupted = true;
+                            result.scan_progress = `${i + 1}/${totalRepos} repositories scanned`;
+                            
+                            saveRealTime(result, orgName, 'github_org', outputDir);
+                            break; // Exit scanning loop
+                        }
+                        
+                        process.stdout.write('\r' + ' '.repeat(100) + '\r'); // Clear the line
+                        console.warn(`${colors.YELLOW}Error for repository ${colors.CYAN}${repo.name}${colors.YELLOW}: ${commitsResult.message}${colors.NC}`);
+                        break; // Skip to next repo
                     }
 
                     if (!Array.isArray(commitsResult)) {
@@ -737,6 +909,7 @@ const runGithubOrganizationRecon = async (orgName, options = {}) => {
                         if (author && author.email) {
                             if (!emailsToName.has(author.email)) {
                                 emailsToName.set(author.email, new Set());
+                                newEmailsFound = true;
                             }
                             emailsToName.get(author.email).add(author.name || "Unknown");
 
@@ -756,6 +929,7 @@ const runGithubOrganizationRecon = async (orgName, options = {}) => {
                         if (committer && committer.email && committer.email !== author.email) {
                             if (!emailsToName.has(committer.email)) {
                                 emailsToName.set(committer.email, new Set());
+                                newEmailsFound = true;
                             }
                             emailsToName.get(committer.email).add(committer.name || "Unknown");
 
@@ -781,6 +955,24 @@ const runGithubOrganizationRecon = async (orgName, options = {}) => {
                 }
 
                 process.stdout.write('\r' + ' '.repeat(100) + '\r'); // Clear the line
+                
+                // If new emails were found in this repo, update and save
+                if (newEmailsFound) {
+                    // Prepare email details for real-time saving
+                    const emailDetails = Array.from(emailsToName.entries()).map(([email, namesSet]) => ({
+                        email,
+                        names: Array.from(namesSet),
+                        sources: Array.from(emailsToRepo.get(email) || []),
+                        github_username: emailsToMember.get(email) || null
+                    }));
+                    
+                    result.leaked_emails = allLeakedEmails;
+                    result.email_details = emailDetails;
+                    result.scan_progress = `${i + 1}/${totalRepos} repositories scanned`;
+                    
+                    saveRealTime(result, orgName, 'github_org', outputDir);
+                }
+                
                 console.log(`${colors.GREEN}Scanned repository ${colors.YELLOW}${i + 1}/${totalRepos}${colors.GREEN}: ${colors.CYAN}${repo.name}${colors.GREEN} - Found ${colors.YELLOW}${Array.from(emailsToRepo.keys()).filter(email => emailsToRepo.get(email).has(repo.name)).length}${colors.GREEN} emails${colors.NC}`);
 
             } catch (error) {
@@ -820,44 +1012,15 @@ const runGithubOrganizationRecon = async (orgName, options = {}) => {
         console.table(emailTable);
     }
 
-    // Build full result object
-    const result = {
-        organization: orgInfo.login,
-        name: orgInfo.name,
-        id: orgInfo.id,
-        description: orgInfo.description,
-        location: orgInfo.location,
-        blog: orgInfo.blog,
-        email: orgInfo.email,
-        twitter_username: orgInfo.twitter_username,
-        created_at: orgInfo.created_at,
-        updated_at: orgInfo.updated_at,
-        avatar_url: orgInfo.avatar_url,
-        members: members.map(member => ({
-            login: member.login,
-            id: member.id,
-            type: member.type,
-            avatar_url: member.avatar_url
-        })),
-        repositories: repos.map(repo => ({
-            name: repo.name,
-            description: repo.description,
-            language: repo.language,
-            fork: repo.fork,
-            created_at: repo.created_at,
-            updated_at: repo.updated_at,
-            url: repo.html_url
-        })),
-        leaked_emails: allLeakedEmails,
-        email_details: emailDetails
-    };
+    // Final update to result object
+    result.scan_completed_at = new Date().toISOString();
 
     // Download avatar if requested
     if (downloadAvatarFlag && orgInfo.avatar_url) {
         await downloadAvatar(orgInfo.avatar_url, orgName, 'github_org');
     }
 
-    // Save output if requested
+    // Save final output if requested
     if (outputFormat) {
         saveOutput(result, outputFormat, orgName, 'github_org');
     }
@@ -869,6 +1032,21 @@ const runGithubOrganizationRecon = async (orgName, options = {}) => {
 const runGitlabRecon = async (username, options = {}) => {
     const { downloadAvatarFlag = false, outputFormat = null } = options;
     console.info(`${colors.GREEN}Running GitLab reconnaissance on user "${colors.YELLOW}${username}${colors.GREEN}"${colors.NC}`);
+
+    // Create output directory if it doesn't exist
+    const outputDir = path.join(process.cwd(), 'gitrecon-results');
+    if (!fs.existsSync(outputDir)) {
+        fs.mkdirSync(outputDir, { recursive: true });
+    }
+
+    // Prepare result object with basic structure
+    let result = {
+        username: username,
+        scan_started_at: new Date().toISOString(),
+        leaked_emails: [],
+        email_details: [],
+        keys: []
+    };
 
     // Fetch user ID first
     const userData = await apiCall(`${GITLAB_API_URL}/users?username=${username}`);
@@ -888,16 +1066,51 @@ const runGitlabRecon = async (username, options = {}) => {
         return null;
     }
 
+    // Update result with user info
+    Object.assign(result, {
+        username: userInfo.username,
+        name: userInfo.name,
+        id: userInfo.id,
+        avatar_url: userInfo.avatar_url,
+        public_email: userInfo.public_email,
+        location: userInfo.location,
+        bio: userInfo.bio,
+        organization: userInfo.organization,
+        job_title: userInfo.job_title,
+        web_url: userInfo.web_url,
+        state: userInfo.state,
+        twitter: userInfo.twitter,
+        linkedin: userInfo.linkedin,
+        skype: userInfo.skype,
+        created_at: userInfo.created_at
+    });
+    
+    // Save initial data
+    saveRealTime(result, username, 'gitlab', outputDir);
+
     console.log(`${colors.GREEN}Found GitLab user: ${colors.YELLOW}${userInfo.username || username}${colors.GREEN} (${colors.YELLOW}${userInfo.name || 'No name'}${colors.GREEN})${colors.NC}`);
 
     // Fetch status
     const userStatus = await apiCall(`${GITLAB_API_URL}/users/${userId}/status`);
+    if (userStatus && !userStatus.error) {
+        result.status = userStatus.message;
+        saveRealTime(result, username, 'gitlab', outputDir);
+    }
 
     // Fetch keys
     const keys = await apiCall(`${GITLAB_API_URL}/users/${userId}/keys`);
 
     if (Array.isArray(keys) && keys.length > 0) {
         console.log(`${colors.GREEN}Found ${colors.YELLOW}${keys.length}${colors.GREEN} public SSH keys${colors.NC}`);
+        
+        // Update result with keys
+        result.keys = keys.map(key => ({
+            title: key.title,
+            created_at: key.created_at,
+            expires_at: key.expires_at,
+            key: key.key
+        }));
+        saveRealTime(result, username, 'gitlab', outputDir);
     } else {
         console.log(`${colors.GREEN}No public SSH keys found${colors.NC}`);
     }
@@ -924,38 +1137,92 @@ const runGitlabRecon = async (username, options = {}) => {
                 const commits = await apiCall(`${GITLAB_API_URL}/projects/${project.id}/repository/commits`);
                 process.stdout.write('\r' + ' '.repeat(100) + '\r'); // Clear the line
 
+                // Handle empty repositories or API errors
+                if (!Array.isArray(commits)) {
+                    if (commits && commits.message) {
+                        if (commits.message.includes("404 Project Not Found") || 
+                            commits.message.includes("Empty repository") || 
+                            commits.message.includes("No commits")) {
+                            console.log(`${colors.YELLOW}Project ${colors.CYAN}${project.name || `Project ${project.id}`}${colors.YELLOW} is empty or not accessible - skipping${colors.NC}`);
+                        } else {
+                            console.warn(`${colors.YELLOW}Error for project ${colors.CYAN}${project.name || `Project ${project.id}`}${colors.YELLOW}: ${commits.message}${colors.NC}`);
+                        }
+                    } else {
+                        console.warn(`${colors.YELLOW}Error fetching commits for project ${colors.CYAN}${project.name || `Project ${project.id}`}${colors.YELLOW}${colors.NC}`);
+                    }
+                    continue;
+                }
+
                 let newEmailsCount = 0;
 
-                if (Array.isArray(commits)) {
-                    for (const commit of commits) {
-                        if (commit.author_email) {
-                            // Track the project where this email was found
-                            if (!emailsToProject.has(commit.author_email)) {
-                                emailsToProject.set(commit.author_email, new Set());
-                            }
-                            emailsToProject.get(commit.author_email).add(project.name || `Project ${project.id}`);
-
-                            // Track all names associated with this email
-                            if (!emailsToName.has(commit.author_email)) {
-                                emailsToName.set(commit.author_email, new Set());
-                                if (commit.author_name === userInfo.name && !allLeakedEmails.includes(commit.author_email)) {
-                                    allLeakedEmails.push(commit.author_email);
-                                    newEmailsCount++;
-                                }
-                            }
-
-                            // Add author name
-                            emailsToName.get(commit.author_email).add(commit.author_name || "Unknown");
+                for (const commit of commits) {
+                    if (commit.author_email) {
+                        // Track the project where this email was found
+                        if (!emailsToProject.has(commit.author_email)) {
+                            emailsToProject.set(commit.author_email, new Set());
                         }
+                        emailsToProject.get(commit.author_email).add(project.name || `Project ${project.id}`);
+
+                        // Track all names associated with this email
+                        if (!emailsToName.has(commit.author_email)) {
+                            emailsToName.set(commit.author_email, new Set());
+                            if (commit.author_name === userInfo.name && !allLeakedEmails.includes(commit.author_email)) {
+                                allLeakedEmails.push(commit.author_email);
+                                newEmailsCount++;
+                            }
+                        }
+
+                        // Add author name
+                        emailsToName.get(commit.author_email).add(commit.author_name || "Unknown");
                     }
+                }
+
+                // Save progress periodically
+                if (newEmailsCount > 0 || i % 5 === 0) {
+                    // Update and save result with new emails
+                    const emailDetails = Array.from(emailsToName.entries())
+                        .filter(([email]) => allLeakedEmails.includes(email))
+                        .map(([email, namesSet]) => ({
+                            email,
+                            names: Array.from(namesSet),
+                            sources: Array.from(emailsToProject.get(email) || [])
+                        }));
+                    
+                    result.leaked_emails = allLeakedEmails;
+                    result.email_details = emailDetails;
+                    result.scan_progress = `${i + 1}/${totalProjects} projects scanned`;
+                    
+                    saveRealTime(result, username, 'gitlab', outputDir);
                 }
 
                 if (newEmailsCount > 0) {
                     console.log(`${colors.GREEN}Found ${colors.YELLOW}${newEmailsCount}${colors.GREEN} new emails in ${colors.CYAN}${project.name || `Project ${project.id}`}${colors.GREEN}${colors.NC}`);
+                } else {
+                    console.log(`${colors.GREEN}Scanned project ${colors.YELLOW}${i + 1}/${totalProjects}${colors.GREEN}: ${colors.CYAN}${project.name || `Project ${project.id}`}${colors.GREEN} - No new emails found${colors.NC}`);
                 }
             } catch (error) {
                 process.stdout.write('\r' + ' '.repeat(100) + '\r'); // Clear the line
                 console.error(`${colors.RED}Error scanning project ${project.id}: ${error.message}${colors.NC}`);
+                
+                // Save progress on error
+                const emailDetails = Array.from(emailsToName.entries())
+                    .filter(([email]) => allLeakedEmails.includes(email))
+                    .map(([email, namesSet]) => ({
+                        email,
+                        names: Array.from(namesSet),
+                        sources: Array.from(emailsToProject.get(email) || [])
+                    }));
+                
+                result.leaked_emails = allLeakedEmails;
+                result.email_details = emailDetails;
+                result.scan_progress = `${i + 1}/${totalProjects} projects scanned`;
+                result.last_error = {
+                    project: project.name || `Project ${project.id}`,
+                    message: error.message,
+                    timestamp: new Date().toISOString()
+                };
+                
+                saveRealTime(result, username, 'gitlab', outputDir);
             }
         }
     } else {
@@ -963,11 +1230,13 @@ const runGitlabRecon = async (username, options = {}) => {
     }
 
     // Prepare email details for display and output
-    const emailDetails = Array.from(emailsToName.entries()).map(([email, namesSet]) => ({
-        email,
-        names: Array.from(namesSet),
-        sources: Array.from(emailsToProject.get(email) || [])
-    }));
+    const emailDetails = Array.from(emailsToName.entries())
+        .filter(([email]) => allLeakedEmails.includes(email))
+        .map(([email, namesSet]) => ({
+            email,
+            names: Array.from(namesSet),
+            sources: Array.from(emailsToProject.get(email) || [])
+        }));
 
     // Display results
     console.log(`\n${colors.GREEN}Reconnaissance completed:${colors.NC}`);
@@ -996,7 +1265,6 @@ const runGitlabRecon = async (username, options = {}) => {
 
         // Create a more organized table format for output
         const emailTable = emailDetails
-            .filter(detail => allLeakedEmails.includes(detail.email))
             .map(detail => ({
                 email: detail.email,
                 names: Array.from(detail.names).join(', ').substring(0, 30) + (Array.from(detail.names).join(', ').length > 30 ? '...' : ''),
@@ -1006,40 +1274,16 @@ const runGitlabRecon = async (username, options = {}) => {
         console.table(emailTable);
     }
 
-    // Build full result object
-    const result = {
-        username: userInfo.username,
-        name: userInfo.name,
-        id: userInfo.id,
-        avatar_url: userInfo.avatar_url,
-        public_email: userInfo.public_email,
-        location: userInfo.location,
-        bio: userInfo.bio,
-        organization: userInfo.organization,
-        job_title: userInfo.job_title,
-        web_url: userInfo.web_url,
-        state: userInfo.state,
-        twitter: userInfo.twitter,
-        linkedin: userInfo.linkedin,
-        skype: userInfo.skype,
-        created_at: userInfo.created_at,
-        leaked_emails: allLeakedEmails,
-        email_details: emailDetails.filter(detail => allLeakedEmails.includes(detail.email)),
-        status: userStatus && !userStatus.error ? userStatus.message : null,
-        keys: Array.isArray(keys) ? keys.map(key => ({
-            title: key.title,
-            created_at: key.created_at,
-            expires_at: key.expires_at,
-            key: key.key
-        })) : []
-    };
+    // Final update to result
+    result.scan_completed_at = new Date().toISOString();
+    result.scan_progress = "completed";
 
     // Download avatar if requested
     if (downloadAvatarFlag && userInfo.avatar_url) {
         await downloadAvatar(userInfo.avatar_url, username, 'gitlab');
     }
 
-    // Save output if requested
+    // Save final output if requested
     if (outputFormat) {
         saveOutput(result, outputFormat, username, 'gitlab');
     }
@@ -1052,12 +1296,43 @@ const runGitlabGroupRecon = async (groupName, options = {}) => {
     const { downloadAvatarFlag = false, outputFormat = null, verbose = false } = options;
     console.info(`${colors.GREEN}Running GitLab reconnaissance on group "${colors.YELLOW}${groupName}${colors.GREEN}"${colors.NC}`);
 
+    // Create output directory if it doesn't exist
+    const outputDir = path.join(process.cwd(), 'gitrecon-results');
+    if (!fs.existsSync(outputDir)) {
+        fs.mkdirSync(outputDir, { recursive: true });
+    }
+
+    // Prepare result object with basic structure
+    let result = {
+        group: groupName,
+        scan_started_at: new Date().toISOString(),
+        members: [],
+        projects: [],
+        leaked_emails: [],
+        email_details: []
+    };
+
     // Fetch group info
     const groupInfo = await apiCall(`${GITLAB_API_URL}/groups/${groupName}`);
     if (groupInfo.error || (groupInfo.message && groupInfo.message.includes('Not Found'))) {
         console.error(`${colors.RED}Error: GitLab group "${groupName}" not found${colors.NC}`);
         return null;
     }
+
+    // Update result with group info
+    Object.assign(result, {
+        group: groupInfo.name,
+        path: groupInfo.path,
+        id: groupInfo.id,
+        description: groupInfo.description,
+        visibility: groupInfo.visibility,
+        web_url: groupInfo.web_url,
+        avatar_url: groupInfo.avatar_url,
+        created_at: groupInfo.created_at
+    });
+
+    // Save initial data
+    saveRealTime(result, groupName, 'gitlab_group', outputDir);
 
     console.log(`${colors.GREEN}Found GitLab group: ${colors.YELLOW}${groupInfo.name || groupName}${colors.GREEN}${colors.NC}`);
 
@@ -1068,6 +1343,17 @@ const runGitlabGroupRecon = async (groupName, options = {}) => {
     if (Array.isArray(membersData)) {
         members = membersData;
         console.log(`${colors.GREEN}Found ${colors.YELLOW}${members.length}${colors.GREEN} group members${colors.NC}`);
+
+        // Update result with members
+        result.members = members.map(member => ({
+            username: member.username,
+            name: member.name,
+            id: member.id,
+            state: member.state,
+            avatar_url: member.avatar_url,
+            web_url: member.web_url
+        }));
+        saveRealTime(result, groupName, 'gitlab_group', outputDir);
 
         if (verbose && members.length > 0) {
             console.log(`${colors.YELLOW}Group Members:${colors.NC}`);
@@ -1086,6 +1372,18 @@ const runGitlabGroupRecon = async (groupName, options = {}) => {
     if (Array.isArray(projectsData)) {
         projects = projectsData;
         console.log(`${colors.GREEN}Found ${colors.YELLOW}${projects.length}${colors.GREEN} group projects${colors.NC}`);
+
+        // Update result with projects
+        result.projects = projects.map(project => ({
+            name: project.name,
+            description: project.description,
+            path: project.path,
+            visibility: project.visibility,
+            created_at: project.created_at,
+            last_activity_at: project.last_activity_at,
+            web_url: project.web_url
+        }));
+        saveRealTime(result, groupName, 'gitlab_group', outputDir);
 
         if (verbose && projects.length > 0) {
             console.log(`${colors.YELLOW}Group Projects:${colors.NC}`);
@@ -1120,50 +1418,102 @@ const runGitlabGroupRecon = async (groupName, options = {}) => {
                 const commits = await apiCall(`${GITLAB_API_URL}/projects/${project.id}/repository/commits`);
                 process.stdout.write('\r' + ' '.repeat(100) + '\r'); // Clear the line
 
+                // Handle empty repositories or API errors
+                if (!Array.isArray(commits)) {
+                    if (commits && commits.message) {
+                        if (commits.message.includes("404 Project Not Found") || 
+                            commits.message.includes("Empty repository") || 
+                            commits.message.includes("No commits")) {
+                            console.log(`${colors.YELLOW}Project ${colors.CYAN}${project.name}${colors.YELLOW} is empty or not accessible - skipping${colors.NC}`);
+                        } else {
+                            console.warn(`${colors.YELLOW}Error for project ${colors.CYAN}${project.name}${colors.YELLOW}: ${commits.message}${colors.NC}`);
+                        }
+                    } else {
+                        console.warn(`${colors.YELLOW}Error fetching commits for project ${colors.CYAN}${project.name}${colors.YELLOW}${colors.NC}`);
+                    }
+                    continue;
+                }
+
                 let newEmailsCount = 0;
 
-                if (Array.isArray(commits)) {
-                    for (const commit of commits) {
-                        if (commit.author_email) {
-                            // Track the project where this email was found
-                            if (!emailsToProject.has(commit.author_email)) {
-                                emailsToProject.set(commit.author_email, new Set());
-                                allLeakedEmails.push(commit.author_email);
-                                newEmailsCount++;
-                            }
-                            emailsToProject.get(commit.author_email).add(project.name);
-
-                            // Track all names associated with this email
-                            if (!emailsToName.has(commit.author_email)) {
-                                emailsToName.set(commit.author_email, new Set());
-                            }
-                            emailsToName.get(commit.author_email).add(commit.author_name || "Unknown");
+                for (const commit of commits) {
+                    if (commit.author_email) {
+                        // Track the project where this email was found
+                        if (!emailsToProject.has(commit.author_email)) {
+                            emailsToProject.set(commit.author_email, new Set());
+                            allLeakedEmails.push(commit.author_email);
+                            newEmailsCount++;
                         }
+                        emailsToProject.get(commit.author_email).add(project.name);
 
-                        // Some GitLab instances also expose committer email
-                        if (commit.committer_email && commit.committer_email !== commit.author_email) {
-                            // Track the project where this email was found
-                            if (!emailsToProject.has(commit.committer_email)) {
-                                emailsToProject.set(commit.committer_email, new Set());
-                                allLeakedEmails.push(commit.committer_email);
-                                newEmailsCount++;
-                            }
-                            emailsToProject.get(commit.committer_email).add(project.name);
-
-                            // Track all names associated with this email
-                            if (!emailsToName.has(commit.committer_email)) {
-                                emailsToName.set(commit.committer_email, new Set());
-                            }
-                            emailsToName.get(commit.committer_email).add(commit.committer_name || "Unknown");
+                        // Track all names associated with this email
+                        if (!emailsToName.has(commit.author_email)) {
+                            emailsToName.set(commit.author_email, new Set());
                         }
+                        emailsToName.get(commit.author_email).add(commit.author_name || "Unknown");
+                    }
+
+                    // Some GitLab instances also expose committer email
+                    if (commit.committer_email && commit.committer_email !== commit.author_email) {
+                        // Track the project where this email was found
+                        if (!emailsToProject.has(commit.committer_email)) {
+                            emailsToProject.set(commit.committer_email, new Set());
+                            allLeakedEmails.push(commit.committer_email);
+                            newEmailsCount++;
+                        }
+                        emailsToProject.get(commit.committer_email).add(project.name);
+
+                        // Track all names associated with this email
+                        if (!emailsToName.has(commit.committer_email)) {
+                            emailsToName.set(commit.committer_email, new Set());
+                        }
+                        emailsToName.get(commit.committer_email).add(commit.committer_name || "Unknown");
                     }
                 }
 
-                console.log(`${colors.GREEN}Scanned project ${colors.YELLOW}${i + 1}/${totalProjects}${colors.GREEN}: ${colors.CYAN}${project.name}${colors.GREEN} - Found ${colors.YELLOW}${newEmailsCount}${colors.GREEN} new emails${colors.NC}`);
+                // Save progress periodically
+                if (newEmailsCount > 0 || i % 5 === 0) {
+                    // Update result with email details
+                    const emailDetails = Array.from(emailsToName.entries()).map(([email, namesSet]) => ({
+                        email,
+                        names: Array.from(namesSet),
+                        sources: Array.from(emailsToProject.get(email) || [])
+                    }));
+                    
+                    result.leaked_emails = allLeakedEmails;
+                    result.email_details = emailDetails;
+                    result.scan_progress = `${i + 1}/${totalProjects} projects scanned`;
+                    
+                    saveRealTime(result, groupName, 'gitlab_group', outputDir);
+                }
+                
+                if (newEmailsCount > 0) {
+                    console.log(`${colors.GREEN}Found ${colors.YELLOW}${newEmailsCount}${colors.GREEN} new emails in ${colors.CYAN}${project.name}${colors.GREEN}${colors.NC}`);
+                } else {
+                    console.log(`${colors.GREEN}Scanned project ${colors.YELLOW}${i + 1}/${totalProjects}${colors.GREEN}: ${colors.CYAN}${project.name}${colors.GREEN} - No new emails found${colors.NC}`);
+                }
 
             } catch (error) {
                 process.stdout.write('\r' + ' '.repeat(100) + '\r'); // Clear the line
                 console.error(`${colors.RED}Error scanning project ${project.id}: ${error.message}${colors.NC}`);
+                
+                // Save progress on error
+                const emailDetails = Array.from(emailsToName.entries()).map(([email, namesSet]) => ({
+                    email,
+                    names: Array.from(namesSet),
+                    sources: Array.from(emailsToProject.get(email) || [])
+                }));
+                
+                result.leaked_emails = allLeakedEmails;
+                result.email_details = emailDetails;
+                result.scan_progress = `${i + 1}/${totalProjects} projects scanned`;
+                result.last_error = {
+                    project: project.name,
+                    message: error.message,
+                    timestamp: new Date().toISOString()
+                };
+                
+                saveRealTime(result, groupName, 'gitlab_group', outputDir);
             }
         }
     }
@@ -1196,43 +1546,16 @@ const runGitlabGroupRecon = async (groupName, options = {}) => {
         console.table(emailTable);
     }
 
-    // Build result object
-    const result = {
-        group: groupInfo.name,
-        path: groupInfo.path,
-        id: groupInfo.id,
-        description: groupInfo.description,
-        visibility: groupInfo.visibility,
-        web_url: groupInfo.web_url,
-        avatar_url: groupInfo.avatar_url,
-        created_at: groupInfo.created_at,
-        members: members.map(member => ({
-            username: member.username,
-            name: member.name,
-            id: member.id,
-            state: member.state,
-            avatar_url: member.avatar_url,
-            web_url: member.web_url
-        })),
-        projects: projects.map(project => ({
-            name: project.name,
-            description: project.description,
-            path: project.path,
-            visibility: project.visibility,
-            created_at: project.created_at,
-            last_activity_at: project.last_activity_at,
-            web_url: project.web_url
-        })),
-        leaked_emails: allLeakedEmails,
-        email_details: emailDetails
-    };
+    // Final update to result object
+    result.scan_completed_at = new Date().toISOString();
+    result.scan_progress = "completed";
 
     // Download avatar if requested
     if (downloadAvatarFlag && groupInfo.avatar_url) {
         await downloadAvatar(groupInfo.avatar_url, groupName, 'gitlab_group');
     }
 
-    // Save output if requested
+    // Save final output if requested
     if (outputFormat) {
         saveOutput(result, outputFormat, groupName, 'gitlab_group');
     }
