@@ -247,28 +247,6 @@ const main = async () => {
             return;
         }
         const result = await findUserNameByEmail(args.email)
-        // {
-        //     "login": "tomtom0",
-        //     "id": 5770687,
-        //     "node_id": "MDQ6VXNlcjU3NzA2ODc=",
-        //     "avatar_url": "https://avatars.githubusercontent.com/u/5770687?v=4",
-        //     "gravatar_id": "",
-        //     "url": "https://api.github.com/users/tomtom0",
-        //     "html_url": "https://github.com/tomtom0",
-        //     "followers_url": "https://api.github.com/users/tomtom0/followers",
-        //     "following_url": "https://api.github.com/users/tomtom0/following{/other_user}",
-        //     "gists_url": "https://api.github.com/users/tomtom0/gists{/gist_id}",
-        //     "starred_url": "https://api.github.com/users/tomtom0/starred{/owner}{/repo}",
-        //     "subscriptions_url": "https://api.github.com/users/tomtom0/subscriptions",
-        //     "organizations_url": "https://api.github.com/users/tomtom0/orgs",
-        //     "repos_url": "https://api.github.com/users/tomtom0/repos",
-        //     "events_url": "https://api.github.com/users/tomtom0/events{/privacy}",
-        //     "received_events_url": "https://api.github.com/users/tomtom0/received_events",
-        //     "type": "User",
-        //     "site_admin": false,
-        //     "score": 1.0
-        //   }
-        
         if(result.total_count > 0){
             console.log(`${colors.CYAN} Found username ${colors.YELLOW}${result.items[0].login}${colors.CYAN} for email ${colors.YELLOW}${args.email}${colors.CYAN}`);
         }else{
