@@ -1,4 +1,4 @@
-// Orijinal koddan GitLab API specific functions
+// GitLab API specific functions
 
 const ApiUtils = require('../../utils/apiUtils');
 const { GITLAB_API_URL } = require('../../config/constants');

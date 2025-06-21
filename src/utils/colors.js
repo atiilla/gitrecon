@@ -1,4 +1,4 @@
-// Orijinal koddan colors objesini kullanan helper functions
+// colors objesini kullanan helper functions
 
 const { colors } = require('../config/constants');
 

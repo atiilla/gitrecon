@@ -1,4 +1,4 @@
-// Orijinal koddan GitLab group reconnaissance
+// GitLab group reconnaissance
 
 const GitLabApi = require('./gitlabApi');
 const FileUtils = require('../../utils/fileUtils');

@@ -1,4 +1,4 @@
-// Rate limiting and API management - orijinal koddan rate limit logic
+// Rate limiting and API management - rate limit logic
 
 const ColorUtils = require('../utils/colors');
 const { getRateLimitInfo, setRateLimitInfo } = require('../config/settings');
@@ -27,7 +27,7 @@ class RateLimiter {
         };
     }
 
-    // Set API token - orijinal koddan updateHeader logic
+    // Set API token - updateHeader logic
     setToken(token, platform) {
         this.tokens[platform] = token;
         console.log(ColorUtils.green(`Rate limiter configured for ${platform} with token`));

@@ -1,4 +1,4 @@
-// Progress tracking and monitoring - orijinal koddan progress logic
+// Progress tracking and monitoring - progress logic
 
 const ColorUtils = require('../utils/colors');
 
@@ -46,7 +46,7 @@ class ProgressTracker {
         return task;
     }
 
-    // Update task progress - orijinal koddan repository scanning progress
+    // Update task progress - repository scanning progress
     updateProgress(taskId, processedItems = null, currentItem = null) {
         const task = this.tasks.get(taskId);
         if (!task) return;
@@ -67,7 +67,7 @@ class ProgressTracker {
         this.displayProgress(taskId);
     }
 
-    // Display progress bar - orijinal koddan progress display logic
+    // Display progress bar - progress display logic
     displayProgress(taskId) {
         const task = this.tasks.get(taskId);
         if (!task || task.totalItems === 0) return;
@@ -215,7 +215,7 @@ class ProgressTracker {
         }
     }
 
-    // Estimate remaining time - orijinal koddan ETA calculation concepts
+    // Estimate remaining time - ETA calculation concepts
     estimateRemainingTime(taskId) {
         const task = this.tasks.get(taskId);
         if (!task || task.processedItems === 0 || task.totalItems === 0) return null;

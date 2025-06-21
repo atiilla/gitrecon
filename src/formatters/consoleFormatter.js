@@ -1,4 +1,4 @@
-// Console output formatting functions - orijinal koddan alınan display logic
+// Console output formatting functions - alınan display logic
 
 const ColorUtils = require('../utils/colors');
 const Validators = require('../utils/validators');
@@ -27,7 +27,7 @@ class ConsoleFormatter {
     `));
     }
 
-    // Display user reconnaissance results - orijinal koddan adapted
+    // Display user reconnaissance results - adapted
     static displayUserResults(data) {
         console.log(`\n${ColorUtils.green('Reconnaissance completed:')}`);
         console.log(ColorUtils.green(`User: ${ColorUtils.yellow(`${data.username} (${data.name || 'No name'})`)}`));
@@ -44,7 +44,7 @@ class ConsoleFormatter {
         console.log(ColorUtils.green(`Leaked Emails: ${ColorUtils.yellow(data.leaked_emails ? data.leaked_emails.length : 0)}`));
     }
 
-    // Display organization reconnaissance results - orijinal koddan adapted
+    // Display organization reconnaissance results - adapted
     static displayOrgResults(data) {
         console.log(`\n${ColorUtils.green('Reconnaissance completed:')}`);
         console.log(ColorUtils.green(`Organization: ${ColorUtils.yellow(`${data.organization || data.group} (${data.name || 'No name'})`)}`));
@@ -96,7 +96,7 @@ class ConsoleFormatter {
         console.table(emailTable);
     }
 
-    // Display organizations list - orijinal koddan adapted
+    // Display organizations list - adapted
     static displayOrganizations(orgs, verbose = false) {
         if (!orgs || orgs.length === 0) return;
 

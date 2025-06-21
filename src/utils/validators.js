@@ -1,4 +1,4 @@
-// Orijinal koddan validation functions
+// validation functions
 
 // Helper function to check email validity - orijinal koddan
 const isValidEmail = (email) => {

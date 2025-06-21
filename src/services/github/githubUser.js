@@ -1,4 +1,4 @@
-// Orijinal koddan GitHub user reconnaissance
+// GitHub user reconnaissance
 
 const GitHubApi = require('./githubApi');
 const FileUtils = require('../../utils/fileUtils');

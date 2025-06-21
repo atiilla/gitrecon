@@ -1,4 +1,4 @@
-// Orijinal koddan alınan sabit değerler
+// alınan sabit değerler
 
 const colors = {
     GREEN: '\x1b[32m',

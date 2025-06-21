@@ -1,4 +1,4 @@
-// Orijinal koddan API call functions
+// API call functions
 
 const axios = require('axios');
 const ColorUtils = require('./colors');

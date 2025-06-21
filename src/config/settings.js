@@ -1,4 +1,4 @@
-// Orijinal koddan alınan global değişkenler ve ayarlar
+// alınan global değişkenler ve ayarlar
 
 let found = [];
 let rateLimitInfo = {

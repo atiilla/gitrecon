@@ -1,4 +1,4 @@
-// Orijinal koddan email search functionality
+// email search functionality
 
 const ApiUtils = require('../utils/apiUtils');
 const ColorUtils = require('../utils/colors');

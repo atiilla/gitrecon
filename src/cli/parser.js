@@ -1,4 +1,4 @@
-// Orijinal koddan argument parsing
+// argument parsing
 
 const { ArgumentParser } = require('argparse');
 
@@ -108,7 +108,7 @@ class CliParser {
         return this.parser.parse_args(args);
     }
 
-    // Validate parsed arguments - orijinal koddan logic
+    // Validate parsed arguments - logic
     validate(args) {
         const errors = [];
 
@@ -117,7 +117,7 @@ class CliParser {
             errors.push('You must specify a target using --user, --email or --org');
         }
 
-        // Repository argument requires user - orijinal koddan logic
+        // Repository argument requires user - logic
         if (args.repository && !args.user) {
             errors.push('--repository option requires --user to be specified');
         }

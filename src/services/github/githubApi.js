@@ -1,4 +1,4 @@
-// Orijinal koddan GitHub API specific functions
+// GitHub API specific functions
 
 const ApiUtils = require('../../utils/apiUtils');
 const ColorUtils = require('../../utils/colors');

@@ -1,4 +1,4 @@
-// Orijinal koddan file operations
+// file operations
 
 const fs = require('fs');
 const path = require('path');

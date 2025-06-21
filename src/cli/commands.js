@@ -1,4 +1,4 @@
-// Orijinal koddan command execution logic
+// command execution logic
 
 const GitHubUser = require('../services/github/githubUser');
 const GitHubOrg = require('../services/github/githubOrg');

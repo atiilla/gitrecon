@@ -1,4 +1,4 @@
-// Orijinal koddan HTML report generation
+// HTML report generation
 
 // Function to convert data to HTML format - orijinal koddan
 const generateHtml = (data) => {
