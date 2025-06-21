@@ -5,7 +5,7 @@
 
 const Scanner = require('./src/core/scanner');
 
-// Main function - orijinal koddan
+// Main function 
 const main = async () => {
     const scanner = new Scanner();
     
