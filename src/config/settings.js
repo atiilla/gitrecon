@@ -2,9 +2,16 @@
 
 let found = [];
 let rateLimitInfo = {
-    remaining: null,
-    limit: null,
-    resetTime: null
+    github: {
+        remaining: null,
+        limit: null,
+        resetTime: null
+    },
+    gitlab: {
+        remaining: null,
+        limit: null,
+        resetTime: null
+    }
 };
 
 // Factory function to create Repository objects
@@ -24,10 +31,13 @@ module.exports = {
     found,
     rateLimitInfo,
     Repository,
-    updateHeader,
-    // Getter/Setter functions
+    updateHeader,    // Getter/Setter functions
     getFound: () => found,
     setFound: (newFound) => { found = newFound; },
-    getRateLimitInfo: () => rateLimitInfo,
-    setRateLimitInfo: (newInfo) => { rateLimitInfo = newInfo; }
+    getRateLimitInfo: (platform = 'github') => rateLimitInfo[platform] || rateLimitInfo.github,
+    setRateLimitInfo: (newInfo, platform = 'github') => { 
+        if (rateLimitInfo[platform]) {
+            rateLimitInfo[platform] = newInfo; 
+        }
+    }
 };

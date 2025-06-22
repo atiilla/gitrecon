@@ -28,7 +28,7 @@ const apiCall = async (url, options = {}) => {
                     limit: parseInt(limit),
                     resetTime
                 };
-                setRateLimitInfo(rateLimitInfo);
+                setRateLimitInfo(rateLimitInfo, 'github');
 
                 // Display rate limit info
                 console.log(ColorUtils.dim(`Rate limit: ${remaining}/${limit} (Resets: ${resetTime.toLocaleTimeString()})`));
