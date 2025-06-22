@@ -19,7 +19,7 @@ class ConsoleFormatter {
              ########  ##  ########          
                 ################             
                                           
-   GitRecon v0.0.4
+   GitRecon v0.0.5
    https://github.com/atiilla
    This tool is intended for educational and ethical security research purposes only.
    For awareness information security and education purposes only.
