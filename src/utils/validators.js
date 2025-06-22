@@ -6,6 +6,29 @@ const isValidEmail = (email) => {
     return re.test(email);
 };
 
+const blacklist = ['tempmail.org',
+    '10minutemail.com',
+    'mailinator.com',
+    'guerrillamail.com',
+    'yopmail.com',
+    'dispostable.com',
+    'maildrop.cc',
+    'fakeinbox.com',
+    'trashmail.com',
+    'getnada.com',
+    'mintemail.com',
+    'mytemp.email',
+    'throwawaymail.com',
+    'mailcatch.com',
+    'spambog.com'
+];
+
+// Function to check if an email is from a disposable domain - orijinal koddan
+const isDisposableEmail = (email) => {
+    const domain = email.split('@')[1];
+    return blacklist.includes(domain.toLowerCase());
+}
+
 // Function to mask email addresses for display - orijinal koddan
 const maskEmail = (email) => {
     const parts = email.split('@');
@@ -26,6 +49,7 @@ const maskEmail = (email) => {
 class Validators {
     static isValidEmail = isValidEmail;
     static maskEmail = maskEmail;
+    static isDisposableEmail = isDisposableEmail;
 
     // Additional validation methods
     static isValidUsername(username) {
