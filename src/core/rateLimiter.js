@@ -29,13 +29,21 @@ class RateLimiter {
 
   // Set API token - updateHeader logic
   setToken(token, platform) {
+    if (!this.tokens.hasOwnProperty(platform)) {
+      throw new Error(
+        `Unsupported platform: ${platform}. Supported platforms: ${Object.keys(
+          this.tokens
+        ).join(", ")}`
+      );
+    }
+
     this.tokens[platform] = token;
     console.log(
       ColorUtils.green(`Rate limiter configured for ${platform} with token`)
     );
   }
 
-  // Check if we're approaching rate limits - orijinal koddan
+  // Check if we're approaching rate limits - from the original code
   checkRateLimit(platform = "github") {
     const rateLimitInfo = getRateLimitInfo();
 
@@ -60,7 +68,7 @@ class RateLimiter {
         }
       }
 
-      // Update display - orijinal koddan
+      // Update display - from the original code
       console.log(
         ColorUtils.dim(
           `Rate limit: ${rateLimitInfo.remaining}/${
@@ -77,54 +85,42 @@ class RateLimiter {
     return true;
   }
 
-  // Update rate limit info from API response headers - orijinal koddan
-  updateFromHeaders(headers, platform = "github") {
-    if (platform === "github" && headers) {
-      const remaining = headers["x-ratelimit-remaining"];
-      const limit = headers["x-ratelimit-limit"];
-      const resetHeader = headers["x-ratelimit-reset"];
+  // Update rate limit info from API response headers - from the original code
+  updateFromHeaders(headers, platform) {
+    const headerKeys =
+      platform === "GitHub"
+        ? {
+            limit: "x-ratelimit-limit",
+            remaining: "x-ratelimit-remaining",
+            reset: "x-ratelimit-reset",
+          }
+        : {
+            limit: "ratelimit-limit",
+            remaining: "ratelimit-remaining",
+            reset: "ratelimit-reset",
+          };
 
-      if (remaining && limit && resetHeader) {
-        const resetTime = new Date(parseInt(resetHeader) * 1000);
-        const rateLimitInfo = {
-          remaining: parseInt(remaining),
-          limit: parseInt(limit),
-          resetTime,
-        };
+    const rateLimitInfo = this._parseRateLimitHeaders(
+      headers,
+      headerKeys,
+      platform
+    );
+    if (rateLimitInfo) this.setRateLimitInfo(rateLimitInfo, platform);
+  }
 
-        setRateLimitInfo(rateLimitInfo);
-        this.requestCounts[platform] = {
-          count: parseInt(limit) - parseInt(remaining),
-          resetTime,
-        };
-
-        return rateLimitInfo;
-      }
-    } else if (platform === "gitlab" && headers) {
-      // GitLab uses different headers
-      const remaining = headers["ratelimit-remaining"];
-      const limit = headers["ratelimit-limit"];
-      const resetHeader = headers["ratelimit-reset"];
-
-      if (remaining && limit && resetHeader) {
-        const resetTime = new Date(parseInt(resetHeader) * 1000);
-        const rateLimitInfo = {
-          remaining: parseInt(remaining),
-          limit: parseInt(limit),
-          resetTime,
-        };
-
-        setRateLimitInfo(rateLimitInfo);
-        this.requestCounts[platform] = {
-          count: parseInt(limit) - parseInt(remaining),
-          resetTime,
-        };
-
-        return rateLimitInfo;
-      }
+  setToken(platform, token) {
+    if (!this.tokens.hasOwnProperty(platform)) {
+      throw new Error(`Unsupported platform: ${platform}`);
     }
+    this.tokens[platform] = token;
+  }
 
-    return null;
+  _parseRateLimitHeaders(headers, headerKeys, platform) {
+    const limit = parseInt(headers[headerKeys.limit], 10);
+    const remaining = parseInt(headers[headerKeys.remaining], 10);
+    const reset = parseInt(headers[headerKeys.reset], 10) * 1000;
+    if (isNaN(limit) || isNaN(remaining) || isNaN(reset)) return null;
+    return { limit, remaining, reset };
   }
 
   // Calculate optimal delay between requests
@@ -290,7 +286,6 @@ class RateLimiter {
           status.rateLimitInfo.limit
         }`
       );
-     
     }
 
     console.log(
@@ -325,16 +320,16 @@ class RateLimiter {
     this.tokens = { github: null, gitlab: null };
   }
 
-  formatTime(seconds) {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
+  formatTime(ms) {
+    const mins = String(Math.floor(ms / 60000)).padStart(2, "0");
+    const secs = String(Math.floor((ms % 60000) / 1000)).padStart(2, "0");
     return `${mins} minutes ${secs} seconds`;
   }
 
   startCountdown(seconds) {
     const interval = setInterval(() => {
       seconds--;
-      const timeStr = this.formatTime(seconds);
+      const timeStr = this.formatTime(ms);
       console.log(`\r⏳ Countdown: ${timeStr} `);
 
       if (seconds <= 0) {
