@@ -70,6 +70,11 @@ class Commands {
             return null;
         }
 
+        if (Validators.isDisposableEmail(args.email)) {
+            ConsoleFormatter.displayError('Disposable email addresses are not allowed');
+            return null;
+        }
+
         if (args.site === 'github') {
             const foundUsername = await EmailSearch.findUsernameByEmail(args.email);
             if (foundUsername) {
