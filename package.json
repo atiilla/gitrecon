@@ -1,6 +1,6 @@
 {
   "name": "gitrecon",
-  "version": "0.0.3",
+  "version": "0.0.5",
   "description": "This CLI tool is designed to retrieve exposed email addresses from a GitHub user’s public activity and to identify a GitHub username associated with a given email address. It is intended strictly for educational use and ethical security research. Please use it responsibly, solely for raising awareness and promoting information security education.",
   "main": "index.js",
   "bin": "index.js",
@@ -15,7 +15,7 @@
     "email"
   ],
   "author": "Atilla",
-  "license": "ISC",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/atiilla/gitrecon.git"

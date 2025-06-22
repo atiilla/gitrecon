@@ -1,4 +1,4 @@
-// alınan sabit değerler
+// Constants and configuration values
 
 const colors = {
     GREEN: '\x1b[32m',
