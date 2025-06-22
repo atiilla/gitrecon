@@ -7,14 +7,14 @@ class CliParser {
         this.parser = this.createParser();
     }
 
-    // Create an argument parser - orijinal koddan
+    // Create an argument parser
     createParser() {
         const parser = new ArgumentParser({
             add_help: true,
             description: 'A tool to scan GitHub/GitLab profiles and organizations for exposed information',
         });
 
-        // Define command line arguments - orijinal koddan
+        // Define command line arguments
         parser.add_argument('-u', '--user', {
             help: 'Username to scan on GitHub/GitLab',
             type: String,

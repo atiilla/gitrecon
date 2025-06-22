@@ -1,4 +1,4 @@
-// Console output formatting functions - alınan display logic
+// Console output formatting functions - imported display logic
 
 const ColorUtils = require('../utils/colors');
 const Validators = require('../utils/validators');
@@ -19,7 +19,7 @@ class ConsoleFormatter {
              ########  ##  ########          
                 ################             
                                           
-   GitRecon v0.0.3
+   GitRecon v0.0.4
    https://github.com/atiilla
    This tool is intended for educational and ethical security research purposes only.
    For awareness information security and education purposes only.
@@ -159,7 +159,7 @@ class ConsoleFormatter {
         }
     }
 
-    // Display legal disclaimer - orijinal koddan
+    // Display legal disclaimer
     static displayLegalDisclaimer() {
         console.log(`\n${ColorUtils.yellow('=== Legal Disclaimer ===')}`);
         console.log(ColorUtils.dim('This tool is provided for legitimate security research purposes only.'));

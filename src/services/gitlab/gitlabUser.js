@@ -4,7 +4,7 @@ const GitLabApi = require('./gitlabApi');
 const FileUtils = require('../../utils/fileUtils');
 const ColorUtils = require('../../utils/colors');
 
-// Function to run GitLab reconnaissance - orijinal koddan
+// Function to run GitLab reconnaissance
 const runGitlabRecon = async (username, options = {}) => {
     const { downloadAvatarFlag = false, outputFormat = null } = options;
     console.info(ColorUtils.green(`Running GitLab reconnaissance on user "${ColorUtils.yellow(username)}"`));

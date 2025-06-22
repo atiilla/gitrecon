@@ -1,4 +1,4 @@
-// alınan global değişkenler ve ayarlar
+// Global variables and settings
 
 let found = [];
 let rateLimitInfo = {
@@ -7,13 +7,13 @@ let rateLimitInfo = {
     resetTime: null
 };
 
-// Factory function to create Repository objects - orijinal koddan
+// Factory function to create Repository objects
 const Repository = (name, isFork) => ({
     name,
     isFork,
 });
 
-// Function to update HTTP headers - orijinal koddan
+// Function to update HTTP headers
 const { HEADER } = require('./constants');
 
 const updateHeader = (updateObj) => {

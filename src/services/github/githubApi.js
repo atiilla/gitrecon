@@ -57,7 +57,7 @@ const getRepositories = async (username) => {
     return repositories;
 };
 
-// Function to retrieve email addresses from a repository's commits - orijinal koddan
+// Function to retrieve email addresses from a repository's commits
 const getEmails = async (username, repoName) => {
     const emailsToName = new Map();
     const seenCommits = new Set();

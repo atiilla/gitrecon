@@ -32,7 +32,7 @@ const downloadAvatar = async (url, username, site) => {
     }
 };
 
-// Add a utility function for real-time saving - orijinal koddan
+// Add a utility function for real-time saving
 const saveRealTime = (data, username, site, outputDir) => {
     const baseFilename = `${username}_${site}_realtime`;
     
