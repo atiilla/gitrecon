@@ -54,18 +54,15 @@ class Scanner {
             if (result) {
                 // Display completion message
                 console.log(ColorUtils.green('Reconnaissance completed.'));
-
-                // Display legal disclaimer - orijinal koddan
-                ConsoleFormatter.displayLegalDisclaimer();
-
                 return result;
-            }        } catch (error) {
+            }
+        } catch (error) {
             ConsoleFormatter.displayError('Scanning failed', error.message);
-            
+
             if (args && args.verbose) {
                 console.error(error.stack);
             }
-            
+
             throw error;
         }
     }
@@ -79,7 +76,7 @@ class Scanner {
     // Parse configuration object to CLI args format
     parseConfig(config) {
         const args = [];
-        
+
         Object.entries(config).forEach(([key, value]) => {
             if (value === true) {
                 args.push(`--${key}`);
@@ -94,12 +91,12 @@ class Scanner {
     // Scan multiple targets
     async scanMultiple(targets) {
         const results = [];
-        
+
         for (let i = 0; i < targets.length; i++) {
             const target = targets[i];
-            
+
             ConsoleFormatter.displayInfo(`Scanning ${i + 1}/${targets.length}: ${target.username || target.org || target.email}`);
-            
+
             try {
                 const result = await this.runWithConfig(target);
                 results.push({
@@ -113,7 +110,7 @@ class Scanner {
                     error: error.message,
                     status: 'error'
                 });
-                
+
                 ConsoleFormatter.displayError(`Failed to scan ${target.username || target.org || target.email}`, error.message);
             }
 
@@ -142,7 +139,7 @@ class Scanner {
 
             // Get target type
             const targetType = await question(ColorUtils.cyan('Target type (user/org/email): '));
-            
+
             if (!['user', 'org', 'email'].includes(targetType)) {
                 ConsoleFormatter.displayError('Invalid target type');
                 return;
@@ -150,14 +147,14 @@ class Scanner {
 
             // Get target value
             const target = await question(ColorUtils.cyan(`Enter ${targetType}: `));
-            
+
             // Get platform
             const platform = await question(ColorUtils.cyan('Platform (github/gitlab) [github]: ')) || 'github';
-            
+
             // Get options
             const verbose = await question(ColorUtils.cyan('Verbose output? (y/n) [n]: '));
             const includeOutput = await question(ColorUtils.cyan('Save output? (json/html/all/n) [n]: '));
-            
+
             // Build config
             const config = {
                 [targetType === 'org' ? 'org' : targetType === 'email' ? 'email' : 'user']: target,
@@ -170,9 +167,9 @@ class Scanner {
             }
 
             console.log(ColorUtils.bright('\n=== STARTING SCAN ===\n'));
-            
+
             const result = await this.runWithConfig(config);
-            
+
             if (result) {
                 console.log(ColorUtils.bright('\n=== SCAN COMPLETE ==='));
                 ConsoleFormatter.displaySummary(result);
@@ -245,19 +242,19 @@ class Scanner {
     // Display environment validation results
     async displayEnvironmentCheck() {
         console.log(ColorUtils.bright('\n=== ENVIRONMENT CHECK ===\n'));
-        
+
         const checks = await this.validateEnvironment();
-        
+
         checks.forEach(check => {
-            const status = check.status === 'pass' ? 
-                ColorUtils.green('✓ PASS') : 
+            const status = check.status === 'pass' ?
+                ColorUtils.green('✓ PASS') :
                 ColorUtils.red('✗ FAIL');
-            
+
             console.log(`${check.name}: ${status} - ${check.details}`);
         });
 
         const allPassed = checks.every(check => check.status === 'pass');
-        
+
         if (allPassed) {
             console.log(ColorUtils.green('\n✓ Environment ready for scanning'));
         } else {

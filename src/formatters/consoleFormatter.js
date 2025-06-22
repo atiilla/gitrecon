@@ -23,6 +23,7 @@ class ConsoleFormatter {
    https://github.com/atiilla
    This tool is intended for educational and ethical security research purposes only.
    For awareness information security and education purposes only.
+   Usage must comply with GitHub/GitLab\'s terms of service and applicable laws.
    
     `));
     }
@@ -157,14 +158,6 @@ class ConsoleFormatter {
         if (current === total) {
             process.stdout.write('\n');
         }
-    }
-
-    // Display legal disclaimer
-    static displayLegalDisclaimer() {
-        console.log(`\n${ColorUtils.yellow('=== Legal Disclaimer ===')}`);
-        console.log(ColorUtils.dim('This tool is provided for legitimate security research purposes only.'));
-        console.log(ColorUtils.dim('Only analyze profiles for which you have proper authorization or that are publicly accessible.'));
-        console.log(ColorUtils.dim('Usage must comply with GitHub/GitLab\'s terms of service and applicable laws.'));
     }
 
     // Display error message
