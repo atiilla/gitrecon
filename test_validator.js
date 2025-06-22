@@ -83,5 +83,5 @@ class Validators {
         }
     }
 }
-
-module.exports = Validators;
+console.log(Validators.checkEmail('test@10minutemail.com').reason);
+console.log(Validators.checkEmail('test@site.abc').reason);
