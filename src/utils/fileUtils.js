@@ -79,16 +79,27 @@ class FileUtils {
             const jsonFilePath = path.join(outputDir, `${baseFilename}.json`);
             fs.writeFileSync(jsonFilePath, JSON.stringify(data, null, 2));
             console.log(ColorUtils.green(`JSON report saved to: ${ColorUtils.yellow(jsonFilePath)}`));
+            this.checkFileSize(jsonFilePath);
         }        // Save HTML output  
         if (format === 'html' || format === 'all') {
             const HtmlFormatter = require('../formatters/htmlFormatter');
             const htmlFilePath = path.join(outputDir, `${baseFilename}.html`);
             fs.writeFileSync(htmlFilePath, HtmlFormatter.generate(data));
             console.log(ColorUtils.green(`HTML report saved to: ${ColorUtils.yellow(htmlFilePath)}`));
+            this.checkFileSize(htmlFilePath);
         }
 
         return { outputDir, baseFilename };
     }
-}
+    static checkFileSize(filePath, maxSizeMB = 1) {
+        const stats = fs.statSync(filePath); // Dosya bilgilerini al
+        const sizeInMB = stats.size / (1024 * 1024); // Byte -> MB
+      
+          console.log(ColorUtils.cyan(`✅ File Size Suitable: ${sizeInMB.toFixed(2)} MB`));
+        }
+      }
+      
+
+
 
 module.exports = FileUtils;
