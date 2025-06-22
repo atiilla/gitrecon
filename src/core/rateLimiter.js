@@ -31,7 +31,7 @@ class RateLimiter {
 
     // Set API token - updateHeader logic
     setToken(token, platform) {
-        if (!this.tokens.hasOwnProperty(platform)) {
+        if (!Object.hasOwn(this.tokens, platform)) { 
             throw new Error(`Unsupported platform: ${platform}. Supported platforms: ${Object.keys(this.tokens).join(', ')}`);
         }
         this.tokens[platform] = token;
@@ -276,12 +276,6 @@ class RateLimiter {
         setRateLimitInfo(emptyRateLimitInfo, 'gitlab');
     }
 
-    // Format time in MM:SS format
-    formatTime(seconds) {
-        const mins = Math.floor(seconds / 60);
-        const secs = seconds % 60;
-        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    }
 
     // Start countdown timer for rate limit reset
     startCountdown(seconds) {
